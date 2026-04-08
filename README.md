@@ -18,13 +18,13 @@ A full-stack e-commerce platform with a shared backend serving both web (React) 
 
 ---
 
-## Day 1 — Backend Foundation
+## Progress
 
-Project structure · FastAPI setup · MSSQL connection · SQLAlchemy ORM base · Alembic migrations · config layer · health check endpoint.
-
-## Day 2 — Database Models
-
-`User`, `Category`, `Product` models with shared `TimestampedBase` mixin · Alembic initial migration · bug fixes.
+| Day | Scope |
+|-----|-------|
+| 1   | Backend foundation — FastAPI, MSSQL, SQLAlchemy, Alembic, health check |
+| 2   | Database models — User, Category, Product, TimestampedBase, initial migration |
+| 3   | Authentication — register, login, JWT access token, protected `/me` endpoint |
 
 ---
 
@@ -40,7 +40,7 @@ nova-store/
     ├── requirements.txt
     ├── alembic.ini
     ├── .env.example
-    ├── .env                   ← copy from .env.example, fill in credentials
+    ├── .env
     ├── alembic/
     │   ├── env.py
     │   ├── script.py.mako
@@ -49,101 +49,165 @@ nova-store/
     └── app/
         ├── main.py
         ├── core/
-        │   ├── config.py      ← Pydantic Settings + DATABASE_URL builder
-        │   └── database.py    ← engine, SessionLocal, Base, get_db()
+        │   ├── config.py            ← settings + JWT config
+        │   ├── database.py          ← engine, SessionLocal, Base, get_db()
+        │   └── security.py          ← password hashing, JWT create/decode
         ├── api/
         │   └── v1/
-        │       └── health.py  ← GET /api/v1/health (includes DB probe)
+        │       ├── dependencies.py  ← get_current_user
+        │       ├── health.py
+        │       └── auth.py          ← register, login, me
         ├── models/
-        │   ├── base.py        ← TimestampedBase (id, created_at, updated_at)
+        │   ├── base.py              ← TimestampedBase
         │   ├── user.py
         │   ├── category.py
         │   └── product.py
-        └── schemas/           ← Pydantic schemas (Day 3+)
+        └── schemas/
+            └── auth.py              ← RegisterRequest, LoginRequest, TokenResponse, UserResponse
 ```
 
 **Layer rules:**
 - `core/` has zero knowledge of `api/` or `models/`
-- `models/` only imports from `core/database.py` (for `Base`)
-- `api/` imports from `models/` and `core/` but never the other way around
+- `models/` only imports from `core/database.py`
+- `schemas/` are pure Pydantic — no ORM imports
+- `api/` imports from `models/`, `schemas/`, and `core/`
+
+---
+
+## Authentication System (Day 3)
+
+### How it works
+
+```
+Client                       API
+  │                           │
+  ├── POST /auth/register ───►│ hash password → save User → return JWT
+  │                           │
+  ├── POST /auth/login ──────►│ verify password → return JWT
+  │                           │
+  ├── GET  /auth/me ─────────►│ decode JWT → load User → return profile
+  │   Authorization: Bearer   │
+  │   <token>                 │
+```
+
+### Password Hashing
+
+Passwords are hashed with **bcrypt** via `passlib`. The raw password never leaves the request object — only the hash is stored in the database. Verification is a constant-time comparison, which prevents timing attacks.
+
+```python
+hash_password("secret")          # → "$2b$12$..."
+verify_password("secret", hash)  # → True / False
+```
+
+### JWT Structure
+
+Tokens are signed **HS256** (HMAC + SHA-256) using `JWT_SECRET_KEY` from your `.env`.
+
+```json
+Header:  { "alg": "HS256", "typ": "JWT" }
+Payload: { "sub": "user@example.com", "exp": 1234567890 }
+```
+
+- `sub` — the user's email (used to load the user on protected routes)
+- `exp` — Unix timestamp of expiry (controlled by `JWT_EXPIRE_MINUTES`)
+
+### Protected Routes
+
+Any endpoint that depends on `get_current_user` requires a valid Bearer token:
+
+```
+Authorization: Bearer <access_token>
+```
+
+`get_current_user` decodes the token, queries the user from the DB, and raises `401` if anything is invalid.
+
+---
+
+## Auth Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/auth/register` | No | Create account, returns JWT |
+| `POST` | `/api/v1/auth/login` | No | Login with credentials, returns JWT |
+| `GET`  | `/api/v1/auth/me` | Bearer token | Return current user profile |
+
+### Register
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "secret123"}'
+```
+
+```json
+{ "access_token": "eyJ...", "token_type": "bearer" }
+```
+
+### Login
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "secret123"}'
+```
+
+```json
+{ "access_token": "eyJ...", "token_type": "bearer" }
+```
+
+### Me
+
+```bash
+curl http://localhost:8000/api/v1/auth/me \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json
+{ "id": 1, "email": "user@example.com", "is_active": true }
+```
+
+### Error Responses
+
+| Scenario | Status | Detail |
+|---|---|---|
+| Email already registered | `409` | `"Email already registered"` |
+| Wrong email or password | `401` | `"Invalid credentials"` |
+| Missing / invalid token | `401` | `"Invalid or expired token"` |
+| Inactive user | `403` | `"Inactive user"` |
 
 ---
 
 ## Database Design
 
-### Why this table structure?
-
-The three tables cover the minimum viable read surface of any e-commerce store: who can buy (`users`), what is sold (`products`), and how products are organized (`categories`). Orders and carts are intentionally left for a later day to keep the schema focused and the first migration small.
-
 ### Entity-Relationship Overview
 
 ```
 users
-  id PK
-  email (unique)
-  password_hash
-  is_active
-  created_at / updated_at
+  id PK · email (unique) · password_hash · is_active · created_at / updated_at
 
 categories
-  id PK
-  name (unique)
-  slug (unique, indexed)
-  created_at / updated_at
+  id PK · name (unique) · slug (unique, indexed) · created_at / updated_at
 
 products
-  id PK
-  name
-  description (nullable)
-  price DECIMAL(10,2)
-  stock INT
-  category_id FK → categories.id
-  created_at / updated_at
+  id PK · name · description · price DECIMAL(10,2) · stock
+  category_id FK → categories.id · created_at / updated_at
 ```
 
-**Relationship:** `Product` → `Category` is many-to-one. One category holds many products; each product belongs to exactly one category.
-
-**Future:** `User` → `Order` → `OrderItem` → `Product` will be added when the order domain is introduced. The `users` table is already in place so that foreign keys can be added without re-creating the table.
+**Relationship:** `Product` → `Category` is many-to-one.
 
 ### TimestampedBase Mixin
 
-All three models inherit from `TimestampedBase` (in `app/models/base.py`) which provides:
-
-- `id` — integer primary key, auto-increment, indexed
-- `created_at` — set by the database on insert (`GETDATE()` server default)
-- `updated_at` — set by the database on insert, updated by SQLAlchemy ORM on every flush
-
-Because `TimestampedBase` carries `__abstract__ = True`, SQLAlchemy does not create a `timestampedbase` table — it only injects the columns into concrete subclasses.
+All models inherit from `TimestampedBase` (`__abstract__ = True`) which injects `id`, `created_at`, `updated_at`. No separate table is created in the DB.
 
 ### Why `Numeric(10, 2)` for price?
 
-`FLOAT` and `DECIMAL` both store numbers, but floating-point types introduce rounding errors in financial calculations (e.g., `0.1 + 0.2 ≠ 0.3`). `Numeric(10, 2)` maps to `DECIMAL(10, 2)` in MSSQL — exact precision up to 99,999,999.99 with two decimal places.
-
----
-
-## Tech Decisions
-
-**FastAPI** — async-ready, high performance, auto-generates OpenAPI docs (`/docs`) used by both web and mobile clients.
-
-**Microsoft SQL Server** — enterprise-grade relational database. `pyodbc` bridges Python to MSSQL natively.
-
-**SQLAlchemy 2.x** — `mapped_column` + `Mapped[T]` type annotations give full static-analysis support. `pool_pre_ping=True` silently reconnects dropped connections.
-
-**Alembic** — migration tool built for SQLAlchemy. `autogenerate` compares your models to the live DB and writes the SQL diff automatically. `alembic/env.py` imports all models before reading `Base.metadata` so autogenerate sees every table.
-
-**Pydantic Settings** — config loaded once at startup (`@lru_cache`), validated, and immutable at runtime. `.env` in dev, real env vars in prod — zero code change.
+Floating-point types introduce rounding errors in financial calculations. `Numeric(10, 2)` maps to `DECIMAL(10, 2)` in MSSQL — exact precision, no surprises.
 
 ---
 
 ## Running the Backend
 
-### 1. Prerequisites
-
-- Python 3.11+
-- [ODBC Driver 17 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
-- A running MSSQL instance with a database named `nova_store`
-
-### 2. Setup
+### Setup
 
 ```bash
 cd backend
@@ -154,19 +218,23 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# Edit .env — fill in DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD
+# Fill in DB credentials and a strong JWT_SECRET_KEY
 ```
 
-### 3. Apply migrations
+Generate a secret key:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+### Apply migrations
 
 ```bash
 cd backend
 alembic upgrade head
 ```
 
-This creates `users`, `categories`, and `products` tables in your MSSQL database.
-
-### 4. Run
+### Run
 
 ```bash
 uvicorn app.main:app --reload
@@ -175,68 +243,44 @@ uvicorn app.main:app --reload
 API → `http://localhost:8000`
 Docs → `http://localhost:8000/docs`
 
-### 5. Health Check
-
-```bash
-curl http://localhost:8000/api/v1/health
-```
-
-```json
-{
-  "status": "ok",
-  "app": "Nova Store API",
-  "version": "0.1.0",
-  "database": "connected"
-}
-```
-
 ---
 
 ## Database Migrations
 
 ```bash
-cd backend
-
-alembic revision --autogenerate -m "describe your change"
+alembic revision --autogenerate -m "describe change"
 alembic upgrade head
 alembic downgrade -1
 ```
-
-**How autogenerate works:** `alembic/env.py` imports `app.models` before reading `Base.metadata`. This causes all ORM model classes to register their table definitions with `Base`. Alembic then compares that metadata against the live database schema and generates only the diff — new columns, dropped tables, index changes, etc.
 
 ---
 
 ## Environment Variables
 
-| Variable      | Example                          |
-|---------------|----------------------------------|
-| `APP_NAME`    | `Nova Store API`                 |
-| `APP_VERSION` | `0.1.0`                          |
-| `DEBUG`       | `false`                          |
-| `DB_SERVER`   | `localhost`                      |
-| `DB_PORT`     | `1433`                           |
-| `DB_NAME`     | `nova_store`                     |
-| `DB_USER`     | `sa`                             |
-| `DB_PASSWORD` | *(keep secret — never commit)*   |
-| `DB_DRIVER`   | `ODBC Driver 17 for SQL Server`  |
-
----
-
-## Bug Fixes Applied (Day 2)
-
-| File | Issue | Fix |
-|---|---|---|
-| `alembic/env.py` | `Base.metadata` was empty — no models imported before autogenerate | Added `import app.models` before `target_metadata = Base.metadata` |
-| `backend/.env` | File missing — app crashed on startup if `.env` not present | Created `.env` from `.env.example` with placeholder values |
+| Variable             | Default   | Description                              |
+|----------------------|-----------|------------------------------------------|
+| `APP_NAME`           | —         | API display name                         |
+| `APP_VERSION`        | `0.1.0`   | Version string                           |
+| `DEBUG`              | `false`   | Enables SQL query logging                |
+| `DB_SERVER`          | —         | MSSQL hostname                           |
+| `DB_PORT`            | `1433`    | MSSQL port                               |
+| `DB_NAME`            | —         | Database name                            |
+| `DB_USER`            | —         | Database username                        |
+| `DB_PASSWORD`        | —         | Database password *(never commit)*       |
+| `DB_DRIVER`          | —         | ODBC driver name                         |
+| `JWT_SECRET_KEY`     | —         | Signing key for JWT *(never commit)*     |
+| `JWT_ALGORITHM`      | `HS256`   | JWT signing algorithm                    |
+| `JWT_EXPIRE_MINUTES` | `60`      | Token lifetime in minutes                |
 
 ---
 
 ## Roadmap
 
-- [x] Backend foundation (FastAPI + MSSQL + SQLAlchemy + Alembic)
+- [x] Backend foundation
 - [x] Database models (User, Category, Product)
-- [ ] Authentication (JWT)
-- [ ] Product catalog endpoints
+- [x] Authentication (register, login, JWT, /me)
+- [ ] Product catalog endpoints (CRUD)
+- [ ] Category endpoints
 - [ ] Shopping cart
 - [ ] Orders
 - [ ] React web frontend

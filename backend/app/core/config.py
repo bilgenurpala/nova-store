@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     DB_PASSWORD: str
     DB_DRIVER: str = "ODBC Driver 17 for SQL Server"
 
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60
+
     @property
     def DATABASE_URL(self) -> str:
         driver = self.DB_DRIVER.replace(" ", "+")

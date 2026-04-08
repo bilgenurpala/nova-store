@@ -106,12 +106,64 @@ Bug fixes on the Day 1 foundation, then full database model layer: shared `Times
 
 ---
 
-### Next Steps
+### Next Steps ✅ (completed Day 3)
 
-- [ ] Implement JWT authentication (register, login, token refresh)
+- [x] Implement JWT authentication (register, login, /me)
 - [ ] Add `User` → `Order` → `OrderItem` → `Product` models
-- [ ] Build Pydantic schemas for `User`, `Category`, `Product`
+- [ ] Build Pydantic schemas for `Category`, `Product`
 - [ ] Build CRUD endpoints for `Category` and `Product`
 - [ ] Add CORS middleware (required for React frontend)
 - [ ] Add request logging middleware
 - [ ] Write unit tests for models and DB layer
+
+---
+
+## Day 3 · 2026-04-08
+
+### Summary
+Full JWT-based authentication system: password hashing with bcrypt, JWT access token creation/decode, register and login endpoints, and a protected `/me` endpoint. JWT config moved into `Settings` so secrets stay in `.env` and never touch source code.
+
+---
+
+### Work Done
+
+- `app/core/security.py` — `hash_password`, `verify_password` (bcrypt via passlib), `create_access_token`, `decode_access_token` (HS256 via python-jose)
+- `app/schemas/auth.py` — `RegisterRequest`, `LoginRequest`, `TokenResponse`, `UserResponse` (Pydantic v2)
+- `app/api/v1/dependencies.py` — `get_current_user`: decodes Bearer token, loads User from DB, raises `401`/`403` on failure
+- `app/api/v1/auth.py` — `POST /register`, `POST /login`, `GET /me`
+- `app/main.py` — auth router registered at `/api/v1`
+- `app/core/config.py` — added `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES`
+- `backend/.env` + `.env.example` — added JWT vars
+- `requirements.txt` — added `python-jose[cryptography]`, `passlib[bcrypt]`, `pydantic[email]`
+
+---
+
+### Technical Decisions
+
+| Decision | Rationale |
+|---|---|
+| `passlib[bcrypt]` for hashing | bcrypt is the industry standard for password storage; passlib wraps it with a clean API and handles salt generation automatically |
+| `python-jose[cryptography]` for JWT | Lightweight, well-maintained JWT library; `cryptography` backend enables RS256 if needed later |
+| `sub` = email in JWT payload | Email is a natural unique identifier; avoids an extra DB round-trip just to map `user_id` → email on every request |
+| `HTTPBearer` over `OAuth2PasswordBearer` | Simpler — works identically for mobile and web clients without OAuth2 form semantics |
+| `decode_access_token` returns `None` on failure | Keeps `security.py` side-effect-free; the HTTP exception is raised in the dependency layer, not in the utility function |
+| `db.refresh(user)` after register | Ensures the returned `User` object has the DB-generated `id` populated before passing it to `create_access_token` |
+| JWT config in `Settings` | Secret key and expiry are environment-specific; they belong in `.env`, not hardcoded |
+
+---
+
+### Challenges
+
+- `pydantic[email]` must be installed separately for `EmailStr` to work in Pydantic v2 — added to `requirements.txt`.
+- `UserResponse` requires `model_config = ConfigDict(from_attributes=True)` in Pydantic v2 to serialize SQLAlchemy ORM objects directly (replaces the old `orm_mode = True` from v1).
+
+---
+
+### Next Steps
+
+- [ ] CRUD endpoints for `Category` (list, create, get, update, delete)
+- [ ] CRUD endpoints for `Product`
+- [ ] Pydantic schemas for `Category` and `Product`
+- [ ] Add CORS middleware (required for React frontend)
+- [ ] Add request logging middleware
+- [ ] Write unit tests for auth endpoints
