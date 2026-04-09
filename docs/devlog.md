@@ -159,11 +159,60 @@ Full JWT-based authentication system: password hashing with bcrypt, JWT access t
 
 ---
 
-### Next Steps
+### Next Steps ✅ (completed Day 4)
 
-- [ ] CRUD endpoints for `Category` (list, create, get, update, delete)
-- [ ] CRUD endpoints for `Product`
-- [ ] Pydantic schemas for `Category` and `Product`
+- [x] CRUD endpoints for `Category`
+- [x] CRUD endpoints for `Product`
+- [x] Pydantic schemas for `Category` and `Product`
 - [ ] Add CORS middleware (required for React frontend)
 - [ ] Add request logging middleware
-- [ ] Write unit tests for auth endpoints
+- [ ] Write unit tests for auth + CRUD endpoints
+
+---
+
+## Day 4 · 2026-04-08
+
+### Summary
+Full CRUD APIs for Category and Product. Schemas with field-level validation, auth-protected write operations, public read operations, and product filtering by category and name search.
+
+---
+
+### Work Done
+
+- `app/schemas/category.py` — `CategoryCreate`, `CategoryUpdate`, `CategoryResponse` with slug format validation
+- `app/schemas/product.py` — `ProductCreate`, `ProductUpdate`, `ProductResponse` with price/stock validation; `ProductResponse` embeds `CategoryResponse`
+- `app/schemas/__init__.py` — exports all schemas
+- `app/api/v1/categories.py` — `POST`, `GET /`, `GET /{id}`, `PUT /{id}`, `DELETE /{id}`; duplicate `slug`/`name` returns `409`
+- `app/api/v1/products.py` — same CRUD; `GET /` accepts `?category_id` and `?search` query params; `category_id` existence validated on create/update
+- `app/main.py` — registered `categories` and `products` routers
+
+---
+
+### Technical Decisions
+
+| Decision | Rationale |
+|---|---|
+| Public GET, protected POST/PUT/DELETE | Read-only browsing works without auth — matches real storefront behaviour; mutations require identity |
+| `_get_or_404` helper per router | Keeps route handlers lean; single place to change 404 logic per resource |
+| `_assert_category_exists` before product write | Prevents orphaned FK errors at the DB level with a clear API-level `400` message |
+| `model_dump(exclude_unset=True)` in PUT | Only fields sent by the client are written — true partial update, no accidental overwrites |
+| `ilike` for product name search | Case-insensitive partial match; works on MSSQL without extra configuration |
+| `ProductResponse` embeds `CategoryResponse` | Clients get the full category object in one request — no second round-trip needed |
+| Slug validator via `@field_validator` | Pattern enforced at schema level before any DB operation — fail fast, clear error message |
+
+---
+
+### Challenges
+
+- Pydantic v2 `@field_validator` runs per field, not per model — `exclude_unset` must be handled at the route layer, not in the schema.
+- `Product.name.ilike` requires SQLAlchemy's column expression; works correctly because `name` is a `mapped_column(String)`.
+
+---
+
+### Next Steps
+
+- [ ] Add CORS middleware (required for React/Flutter clients)
+- [ ] Add request logging middleware
+- [ ] Shopping cart domain (Cart, CartItem models + API)
+- [ ] Order domain (Order, OrderItem models + API)
+- [ ] Unit tests for Category and Product endpoints
