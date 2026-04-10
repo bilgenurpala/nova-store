@@ -209,10 +209,60 @@ Full CRUD APIs for Category and Product. Schemas with field-level validation, au
 
 ---
 
-### Next Steps
+### Next Steps ✅ (completed Day 5)
 
+- [x] Shopping cart domain (Cart, CartItem models + API)
 - [ ] Add CORS middleware (required for React/Flutter clients)
 - [ ] Add request logging middleware
-- [ ] Shopping cart domain (Cart, CartItem models + API)
 - [ ] Order domain (Order, OrderItem models + API)
 - [ ] Unit tests for Category and Product endpoints
+
+---
+
+## Day 5 · 2026-04-08
+
+### Summary
+Cart system: `Cart` and `CartItem` models, Alembic migration, full cart API (view, add, update quantity, remove), schemas with validation, and `User.cart` back-reference. README rewritten as a professional product document — all "Day X" progress notes moved exclusively to this devlog.
+
+---
+
+### Work Done
+
+- `app/models/cart.py` — `Cart` (one-per-user via `unique=True` on `user_id`), `CartItem` (cart_id + product_id + quantity); `cascade="all, delete-orphan"` on `Cart.items`
+- `app/models/user.py` — added `cart` relationship (`uselist=False`) back to `Cart`
+- `app/models/__init__.py` — exports `Cart`, `CartItem`
+- `alembic/versions/20260408_0002_add_cart_tables.py` — creates `carts` and `cart_items` with FK constraints and indexes; `down_revision = a1b2c3d4e5f6`
+- `app/schemas/cart.py` — `AddToCartRequest`, `UpdateCartItemRequest`, `RemoveCartItemRequest`, `CartItemResponse`, `CartResponse`
+- `app/api/v1/cart.py` — `GET /cart`, `POST /cart/add`, `PUT /cart/update`, `DELETE /cart/remove`; all endpoints protected
+- `app/main.py` — cart router registered
+- `README.md` — full rewrite as professional product doc (no Day references)
+
+---
+
+### Technical Decisions
+
+| Decision | Rationale |
+|---|---|
+| `unique=True` on `Cart.user_id` | Enforced at both DB and ORM level — one cart per user is a constraint, not just a convention |
+| `_get_or_create_cart` helper | Centralises the auto-creation logic; every route calls it instead of duplicating the check |
+| Add increments existing quantity | Better UX — adding a product you already have accumulates rather than resetting; mirrors real storefront behaviour |
+| `PUT /update` with `quantity=0` removes item | Single endpoint handles both "change qty" and "effectively remove" — fewer client-side code paths |
+| `cascade="all, delete-orphan"` on items | Deleting a cart cleans up all its items automatically at the ORM level |
+| `CartResponse` embeds `CartItemResponse` which embeds `ProductResponse` | Client gets the full cart in one call — no N+1 requests needed |
+| All cart endpoints protected | Cart is personal data — no read is safe to expose publicly |
+
+---
+
+### Challenges
+
+- `User.cart` must use `uselist=False` to return a single `Cart` object rather than a list — SQLAlchemy default for `relationship()` is a list even on a one-to-one FK.
+- `db.refresh(cart)` after item mutations is required to reload the `items` collection — without it, the response returns stale data from the session cache.
+
+---
+
+### Next Steps
+
+- [ ] Order domain (Order, OrderItem models + API)
+- [ ] CORS middleware (required for React/Flutter clients)
+- [ ] Request logging middleware
+- [ ] Unit tests for cart endpoints

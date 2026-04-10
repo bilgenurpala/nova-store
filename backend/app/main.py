@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.core.config import settings
-from app.api.v1 import health, auth, categories, products
+from app.api.v1 import health, auth, categories, products, cart
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -13,6 +13,7 @@ app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(categories.router, prefix="/api/v1")
 app.include_router(products.router, prefix="/api/v1")
+app.include_router(cart.router, prefix="/api/v1")
 
 
 @app.get("/", tags=["Root"])
