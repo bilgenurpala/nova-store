@@ -296,9 +296,9 @@ DB_DRIVER=ODBC Driver 17 for SQL Server
 
 **Option A — Python script (recommended)**
 
-```bash
+```bat
 cd backend
-python scripts/create_db.py
+py scripts/create_db.py
 ```
 
 The script connects to the `master` database using the credentials in `.env`, checks whether `nova_store` exists, and creates it if it does not. Safe to run multiple times.
@@ -307,7 +307,7 @@ The script connects to the `master` database using the credentials in `.env`, ch
 
 Open `backend/scripts/create_db.sql` in SQL Server Management Studio and execute it, or run:
 
-```bash
+```bat
 sqlcmd -S localhost -U sa -P your_password -i scripts/create_db.sql
 ```
 
@@ -317,7 +317,7 @@ Right-click **Databases → New Database**, enter `nova_store`, click OK.
 
 ### Step 3 — Apply migrations
 
-```bash
+```bat
 cd backend
 alembic upgrade head
 ```
@@ -331,8 +331,8 @@ This runs all pending migration files in `alembic/versions/` in order and create
 
 ### Step 4 — Verify tables
 
-```bash
-python scripts/verify_tables.py
+```bat
+py scripts/verify_tables.py
 ```
 
 Expected output:
@@ -351,11 +351,14 @@ All expected tables are present.
 
 ## Running the Backend
 
-```bash
+> **Windows note:** use `py` instead of `python`, and `venv\Scripts\activate` instead of `source venv/bin/activate`.
+
+```bat
 cd backend
-python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+py -m venv venv
+venv\Scripts\activate
 pip install -r requirements.txt
-# complete Database Setup steps above first
+rem Complete Database Setup steps above first
 uvicorn app.main:app --reload
 ```
 
@@ -364,8 +367,8 @@ Docs → `http://localhost:8000/docs`
 
 Generate a secure JWT secret key:
 
-```bash
-python -c "import secrets; print(secrets.token_hex(32))"
+```bat
+py -c "import secrets; print(secrets.token_hex(32))"
 ```
 
 Paste the output as `JWT_SECRET_KEY` in your `.env`.

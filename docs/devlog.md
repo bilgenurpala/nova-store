@@ -326,3 +326,175 @@ Brought the backend online against a real Microsoft SQL Server instance. Created
 - [ ] CORS middleware
 - [ ] Request logging middleware
 - [ ] Unit tests
+
+---
+
+## Project Plan — Revised 2026-04-10
+
+### Context
+
+By end of Day 6 (10 Nisan), the backend core is complete and ahead of the original schedule:
+
+| Module | Status |
+|---|---|
+| Backend foundation (FastAPI, config, DB, Alembic) | ✅ Done |
+| Models: User, Category, Product, Cart, CartItem | ✅ Done |
+| Auth: register, login, JWT, /me | ✅ Done |
+| Category CRUD | ✅ Done |
+| Product CRUD (search, filter) | ✅ Done |
+| Cart system (add, update, remove) | ✅ Done |
+| DB creation + migration scripts | ✅ Done |
+| Role system (admin/customer) | ❌ Not done |
+| Order, OrderItem, Address models + API | ❌ Not done |
+| CORS middleware | ❌ Not done |
+| Pagination | ❌ Not done |
+| Product images | ❌ Not done |
+| Seed data | ❌ Not done |
+| Docker | ❌ Not done |
+| React frontend | ❌ Not done |
+| Flutter mobile | ❌ Not done |
+| AI integration | ❌ Not done |
+
+Cart was planned for Day 7 (11 Nisan) in the original plan but was completed on Day 5-6. This frees one day which has been redistributed into a backend cleanup day.
+
+---
+
+### Gaps Found in Original Plan
+
+1. **Role sistemi uygulanmadı.** 9 Nisan'da "admin/user ayrımı" yazıyordu ama JWT'de role bilgisi yok, admin-only guard yok. Admin panel buna bağlı — önce çözülmeli.
+2. **Eksik modeller.** DB tasarımında listelenen `addresses` ve `product_images` için hiç implementation günü ayrılmamıştı.
+3. **Pagination yok.** Product listing sonsuz döner. Frontend'e geçmeden eklenmeli.
+4. **CORS middleware hep ertelendi.** Her günün "Next Steps"inde var ama hiç yapılmadı. React/Flutter'dan istek atılınca ilk engel bu olacak.
+5. **Order modülü tek güne sıkıştırılmıştı.** Price snapshot, durum makinesi, admin order management — bunlar ciddi kapsam. Güçlendirildi.
+6. **React kurulum günü yoktu.** Plan direkt admin panele atlıyordu. Vite, routing, auth context, API katmanı kurulumu için zaman ayrıldı.
+7. **Seed data zamanlaması belirsizdi.** Backend cleanup gününe eklendi.
+8. **Docker hiç planlanmamıştı.** Minimum `Dockerfile` + `docker-compose.yml` profesyonel bir proje için bekleniyor.
+
+---
+
+### Revised Schedule
+
+#### Gün 7 · 11 Nisan — Role Sistemi + Order Modülü
+
+**Role sistemi:**
+- `User.role` alanı ekle (`customer` / `admin`, default `customer`)
+- `get_current_admin` dependency — role != admin → 403
+- Mevcut write endpoint'lerini admin-only yap
+- Migration: `users` tablosuna `role` kolonu
+
+**Order modülü:**
+- `Order` modeli: `user_id`, `status` (pending / paid / shipped / cancelled), `total_price`, timestamps
+- `OrderItem` modeli: `order_id`, `product_id`, `quantity`, `unit_price` (o anki fiyatın snapshot'ı — sonraki fiyat değişikliklerinden etkilenmez)
+- `Address` modeli: `user_id`, `full_name`, `line1`, `line2`, `city`, `country`, `postal_code`
+- Migration: `orders`, `order_items`, `addresses`
+- Endpoint'ler: `POST /orders` (cart'tan sipariş oluştur, cart'ı temizle), `GET /orders`, `GET /orders/{id}`, `PUT /orders/{id}/status` (admin-only)
+
+---
+
+#### Gün 8 · 12 Nisan — Backend Tamamlama Günü
+
+Biriken backend borcu bu gün kapatılır:
+
+- **CORS middleware** — `CORSMiddleware` `main.py`'a eklenir; `localhost:3000` ve `localhost:5173` whitelist
+- **Pagination** — `GET /products` ve `GET /categories`'e `skip: int = 0, limit: int = 20` parametreleri
+- **Product images** — `ProductImage` modeli (URL tabanlı): `product_id`, `url`, `alt_text`, `is_primary`; migration; `ProductResponse`'a `images` dahil edilir
+- **Seed data scripti** — `scripts/seed.py`: örnek admin user, kategoriler, ürünler, product images
+- **Docker** — `backend/Dockerfile` + `docker-compose.yml` (FastAPI + MSSQL)
+
+---
+
+#### Gün 9 · 13 Nisan — React Kurulumu + Admin Panel Foundation
+
+- Vite + React + TypeScript kurulumu (`frontend/` klasörü)
+- Klasör yapısı: `pages/`, `components/`, `api/`, `hooks/`, `context/`
+- `axios` instance — base URL, Authorization header otomatik ekleme
+- `react-router-dom` routing
+- Auth context (login state, token yönetimi, localStorage)
+- Admin login sayfası (API'ye bağlı)
+- Protected route component (admin değilse redirect)
+- Dashboard layout: sidebar + topbar shell
+
+---
+
+#### Gün 10 · 14 Nisan — Admin Panel Core Modüller
+
+- Ürün listesi (tablo, pagination)
+- Ürün oluşturma / düzenleme formu
+- Ürün silme (confirm modal)
+- Kategori listesi + oluşturma / silme
+- Sipariş listesi (status badge'li tablo)
+- Sipariş detay sayfası (items, kullanıcı, adres)
+- Sipariş durumu güncelleme (dropdown → API)
+- Dashboard kartları: toplam kullanıcı, ürün, sipariş
+
+---
+
+#### Gün 11 · 15 Nisan — Customer Web — Part 1
+
+Figma tasarımları burada devreye girer. Önce görsel yapı, sonra API bağlantısı:
+
+- Homepage (hero, featured products, kategoriler)
+- Shop sayfası (product grid, pagination)
+- Category filtresi
+- Search bar (debounced, `?search=` param)
+- Ürün detay sayfası (fiyat, stok, açıklama, görseller)
+
+---
+
+#### Gün 12 · 16 Nisan — Customer Web — Part 2
+
+- Login / Register sayfaları (API'ye bağlı)
+- Auth guard (login olmadan cart erişimi engeli)
+- Cart sayfası (items, quantity update, remove, toplam)
+- "Sepete ekle" button logic
+- Checkout sayfası (adres formu + sipariş özeti + "Onayla" → POST /orders)
+- Siparişlerim sayfası
+
+---
+
+#### Gün 13 · 17 Nisan — Mobile (Flutter)
+
+Kapsam bilinçli olarak dar — "sistemin mobil client'ı var" mesajını verecek kadar:
+
+- Flutter proje kurulumu (`mobile/` klasörü), `dio` + `shared_preferences` + `provider`
+- Login / Register ekranları
+- Ürün listesi ekranı (grid, search)
+- Ürün detay ekranı
+- Sepet ekranı (add, update, remove)
+- Basit checkout ekranı
+
+---
+
+#### Gün 14 · 18 Nisan — AI Entegrasyonu
+
+**Seçim: Product Description Generator**
+
+- Backend: `POST /api/v1/ai/generate-description` — admin-only; ürün adı + özellikler alır, OpenAI/Claude API'ye gönderir, açıklama döner
+- `.env`'e `AI_API_KEY` eklenir
+- Admin panel: "Ürün Oluştur" formuna "AI ile Açıklama Üret" butonu
+- Buton: ürün adı + kategoriden açıklama üretir, textarea'ya otomatik doldurur
+- (Vakit kalırsa) Ürün detay sayfasına "Benzer Ürünler" bölümü (aynı kategori filtreli)
+
+---
+
+#### Gün 15 · 19 Nisan — Polish + Docker
+
+- Form validation hataları field-level gösterilsin
+- Loading skeleton'ları (product list, order list)
+- Empty state'ler (boş sepet, sipariş yok, ürün bulunamadı)
+- API hata mesajları kullanıcıya gösterilsin
+- Responsive düzeltmeler
+- Kod temizliği (console.log, unused imports)
+- `docker-compose up` ile tüm sistem ayağa kalkıyor mu test et
+- README final düzenlemesi
+
+---
+
+#### Gün 16 · 20 Nisan — Final Paketleme
+
+- Seed data son hali (gerçekçi isimler, fiyatlar, görseller)
+- README tamamla: kurulum, mimari, özellik listesi
+- Architecture diagram (backend, frontend, mobile, DB, AI API)
+- Ekran görüntüleri al (admin panel, shop, mobile)
+- Sunum notu: "Neden bu kararları aldım" listesi
+- AI entegrasyonu teknik açıklama (ne kullandım, nasıl entegre ettim)
