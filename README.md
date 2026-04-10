@@ -266,37 +266,129 @@ curl -X DELETE http://localhost:8000/api/v1/cart/remove \
 
 ---
 
+## Database Setup
+
+### Prerequisites
+
+- Microsoft SQL Server (any edition) running on your machine or network
+- [ODBC Driver 17 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) installed
+- The `sa` account (or any login with `dbcreator` role) enabled and password set
+
+### Step 1 — Configure .env
+
+```bash
+cd backend
+cp .env.example .env
+```
+
+Edit `.env` and fill in your real values:
+
+```env
+DB_SERVER=localhost          # or your SQL Server hostname / IP
+DB_PORT=1433
+DB_NAME=nova_store
+DB_USER=sa
+DB_PASSWORD=your_real_password
+DB_DRIVER=ODBC Driver 17 for SQL Server
+```
+
+### Step 2 — Create the database
+
+**Option A — Python script (recommended)**
+
+```bash
+cd backend
+python scripts/create_db.py
+```
+
+The script connects to the `master` database using the credentials in `.env`, checks whether `nova_store` exists, and creates it if it does not. Safe to run multiple times.
+
+**Option B — SQL script (SSMS or sqlcmd)**
+
+Open `backend/scripts/create_db.sql` in SQL Server Management Studio and execute it, or run:
+
+```bash
+sqlcmd -S localhost -U sa -P your_password -i scripts/create_db.sql
+```
+
+**Option C — SSMS manually**
+
+Right-click **Databases → New Database**, enter `nova_store`, click OK.
+
+### Step 3 — Apply migrations
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+This runs all pending migration files in `alembic/versions/` in order and creates the following tables:
+
+| Migration | Tables created |
+|---|---|
+| `0001_initial_tables` | `users`, `categories`, `products` |
+| `0002_add_cart_tables` | `carts`, `cart_items` |
+
+### Step 4 — Verify tables
+
+```bash
+python scripts/verify_tables.py
+```
+
+Expected output:
+
+```
+  ✓  users
+  ✓  categories
+  ✓  products
+  ✓  carts
+  ✓  cart_items
+
+All expected tables are present.
+```
+
+---
+
 ## Running the Backend
 
 ```bash
 cd backend
 python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env    # fill in DB credentials and JWT_SECRET_KEY
-alembic upgrade head
+# complete Database Setup steps above first
 uvicorn app.main:app --reload
 ```
 
 API → `http://localhost:8000`
 Docs → `http://localhost:8000/docs`
 
-Generate a secure secret key:
+Generate a secure JWT secret key:
 
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
+
+Paste the output as `JWT_SECRET_KEY` in your `.env`.
 
 ---
 
 ## Migrations
 
 ```bash
-alembic revision --autogenerate -m "describe change"
+# Create a new migration after changing a model
+alembic revision --autogenerate -m "describe your change"
+
+# Apply all pending migrations
 alembic upgrade head
+
+# Roll back one migration
 alembic downgrade -1
+
+# Check current migration state
+alembic current
 ```
 
-Alembic discovers all tables automatically because `alembic/env.py` imports `app.models` before reading `Base.metadata`.
+Alembic discovers all tables automatically because `alembic/env.py` imports `app.models` before reading `Base.metadata`. Any new model added to `app/models/` will be picked up by `autogenerate` without extra registration.
 
 ---
 

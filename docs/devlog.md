@@ -260,9 +260,69 @@ Cart system: `Cart` and `CartItem` models, Alembic migration, full cart API (vie
 
 ---
 
-### Next Steps
+### Next Steps ✅ (completed Day 6)
 
+- [x] Real database created on SQL Server (`nova_store`)
+- [x] Migrations applied — all 5 tables live in DB
+- [x] Table verification script added
 - [ ] Order domain (Order, OrderItem models + API)
 - [ ] CORS middleware (required for React/Flutter clients)
 - [ ] Request logging middleware
 - [ ] Unit tests for cart endpoints
+
+---
+
+## Day 6 · 2026-04-08
+
+### Summary
+Brought the backend online against a real Microsoft SQL Server instance. Created the `nova_store` database, applied both Alembic migrations (`0001` and `0002`), verified all 5 tables exist, and added utility scripts to make this process repeatable for any developer. README updated with a dedicated Database Setup section.
+
+---
+
+### Work Done
+
+- `backend/scripts/create_db.py` — Python script that connects to `master`, checks for `nova_store`, and creates it if missing; reads credentials from `.env`; safe to run multiple times
+- `backend/scripts/create_db.sql` — equivalent T-SQL script for SSMS or `sqlcmd`
+- `backend/scripts/verify_tables.py` — inspects the live database via SQLAlchemy and confirms all 5 expected tables are present; exits non-zero if any are missing
+- `alembic upgrade head` applied — migration chain `a1b2c3d4e5f6 → b2c3d4e5f6a7` executed; `alembic_version` table created by Alembic to track state
+- `README.md` — new **Database Setup** section with step-by-step instructions (three options for DB creation), migration table, verification step
+
+---
+
+### Tables Confirmed in nova_store
+
+| Table | Migration |
+|---|---|
+| `users` | 0001_initial_tables |
+| `categories` | 0001_initial_tables |
+| `products` | 0001_initial_tables |
+| `carts` | 0002_add_cart_tables |
+| `cart_items` | 0002_add_cart_tables |
+
+---
+
+### Technical Decisions
+
+| Decision | Rationale |
+|---|---|
+| `create_db.py` connects to `master` | Cannot connect to `nova_store` before it exists; `master` is always available on any SQL Server instance |
+| `autocommit=True` on pyodbc connection | `CREATE DATABASE` cannot run inside a transaction in T-SQL — `autocommit` is required |
+| `TrustServerCertificate=yes` in script | Local dev SQL Server instances typically use self-signed certificates; avoids SSL handshake failure without changing server config |
+| `inspect(engine)` in verify script | SQLAlchemy's `Inspector` is dialect-agnostic — works against any supported DB without writing raw SQL |
+| Script reads from `.env` via `Settings` | Single source of truth — no hardcoded credentials in scripts |
+
+---
+
+### Challenges
+
+- `CREATE DATABASE` in SQL Server cannot execute inside an open transaction. `pyodbc` opens a transaction by default — fixed by passing `autocommit=True` to `pyodbc.connect()`.
+- SQL Server's self-signed SSL certificate causes `pyodbc` to reject the connection unless `TrustServerCertificate=yes` is added to the connection string (local dev only).
+
+---
+
+### Next Steps
+
+- [ ] Order domain (Order, OrderItem models + API)
+- [ ] CORS middleware
+- [ ] Request logging middleware
+- [ ] Unit tests
