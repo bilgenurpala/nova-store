@@ -1,9 +1,3 @@
--- Run this script in SQL Server Management Studio (SSMS)
--- or with sqlcmd against your SQL Server instance.
---
--- Usage (sqlcmd):
---   sqlcmd -S localhost -U sa -P your_password -i create_db.sql
-
 USE master;
 GO
 

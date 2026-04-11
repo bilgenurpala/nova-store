@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.v1.dependencies import get_current_user
+from app.api.v1.dependencies import get_current_admin
 from app.core.database import get_db
 from app.models.category import Category
 from app.models.product import Product
@@ -30,7 +30,7 @@ def _assert_category_exists(category_id: int, db: Session) -> None:
 def create_product(
     payload: ProductCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_admin),
 ):
     _assert_category_exists(payload.category_id, db)
     product = Product(**payload.model_dump())
@@ -67,7 +67,7 @@ def update_product(
     product_id: int,
     payload: ProductUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_admin),
 ):
     product = _get_or_404(product_id, db)
 
@@ -87,7 +87,7 @@ def update_product(
 def delete_product(
     product_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_admin),
 ):
     product = _get_or_404(product_id, db)
     db.delete(product)

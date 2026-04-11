@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.v1.dependencies import get_current_user
+from app.api.v1.dependencies import get_current_admin
 from app.core.database import get_db
 from app.models.category import Category
 from app.models.user import User
@@ -21,7 +21,7 @@ def _get_or_404(category_id: int, db: Session) -> Category:
 def create_category(
     payload: CategoryCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_admin),
 ):
     if db.query(Category).filter(Category.slug == payload.slug).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Slug already exists")
@@ -50,7 +50,7 @@ def update_category(
     category_id: int,
     payload: CategoryUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_admin),
 ):
     category = _get_or_404(category_id, db)
 
@@ -76,7 +76,7 @@ def update_category(
 def delete_category(
     category_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_admin),
 ):
     category = _get_or_404(category_id, db)
     db.delete(category)

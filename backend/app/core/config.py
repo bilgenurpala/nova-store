@@ -1,3 +1,4 @@
+import urllib.parse
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -8,11 +9,11 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     DB_SERVER: str
-    DB_PORT: int = 1433
     DB_NAME: str
-    DB_USER: str
-    DB_PASSWORD: str
     DB_DRIVER: str = "ODBC Driver 17 for SQL Server"
+    DB_TRUSTED_CONNECTION: bool = False
+    DB_USER: str = ""
+    DB_PASSWORD: str = ""
 
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
@@ -20,12 +21,25 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        driver = self.DB_DRIVER.replace(" ", "+")
-        return (
-            f"mssql+pyodbc://{self.DB_USER}:{self.DB_PASSWORD}"
-            f"@{self.DB_SERVER}:{self.DB_PORT}/{self.DB_NAME}"
-            f"?driver={driver}"
-        )
+        if self.DB_TRUSTED_CONNECTION:
+            conn = (
+                f"DRIVER={{{self.DB_DRIVER}}};"
+                f"SERVER={self.DB_SERVER};"
+                f"DATABASE={self.DB_NAME};"
+                f"Trusted_Connection=yes;"
+                f"TrustServerCertificate=yes;"
+            )
+        else:
+            conn = (
+                f"DRIVER={{{self.DB_DRIVER}}};"
+                f"SERVER={self.DB_SERVER};"
+                f"DATABASE={self.DB_NAME};"
+                f"UID={self.DB_USER};"
+                f"PWD={self.DB_PASSWORD};"
+                f"TrustServerCertificate=yes;"
+            )
+        params = urllib.parse.quote_plus(conn)
+        return f"mssql+pyodbc:///?odbc_connect={params}"
 
     class Config:
         env_file = ".env"

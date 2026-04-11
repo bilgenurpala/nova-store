@@ -1,10 +1,3 @@
-"""
-Verify that all expected tables exist in the nova_store database.
-
-Run from the backend/ directory after applying migrations:
-    python scripts/verify_tables.py
-"""
-
 import sys
 import os
 

@@ -1,6 +1,6 @@
 # Nova Store
 
-A full-stack e-commerce platform — shared REST backend serving both a React web client and a Flutter mobile app.
+A full-stack e-commerce platform — a shared REST backend serving both a React web client and a Flutter mobile app.
 
 ---
 
@@ -21,9 +21,11 @@ A full-stack e-commerce platform — shared REST backend serving both a React we
 ## Features
 
 - JWT authentication (register, login, protected routes)
-- Category management (CRUD)
-- Product catalog (CRUD + search + category filter)
-- Shopping cart (add, update, remove — per-user, auto-created)
+- Role-based access control (`customer` / `admin`)
+- Category management (admin-only write, public read)
+- Product catalog (admin-only write, public read + search + filter)
+- Shopping cart (per-user, auto-created, increment on duplicate add)
+- Order management (create from cart, price snapshot, status lifecycle)
 
 ---
 
@@ -39,35 +41,43 @@ nova-store/
     ├── requirements.txt
     ├── alembic.ini
     ├── .env.example · .env
+    ├── scripts/
+    │   ├── create_db.py
+    │   ├── create_db.sql
+    │   └── verify_tables.py
     ├── alembic/
     │   └── versions/
     │       ├── 20260407_0001_initial_tables.py
-    │       └── 20260408_0002_add_cart_tables.py
+    │       ├── 20260408_0002_add_cart_tables.py
+    │       └── 20260411_0003_role_and_order_tables.py
     └── app/
         ├── main.py
         ├── core/
-        │   ├── config.py            ← Pydantic Settings + JWT config
+        │   ├── config.py            ← Pydantic Settings + DB + JWT config
         │   ├── database.py          ← engine, SessionLocal, Base, get_db()
         │   └── security.py          ← bcrypt hashing + JWT create/decode
         ├── api/
         │   └── v1/
-        │       ├── dependencies.py  ← get_current_user
+        │       ├── dependencies.py  ← get_current_user, get_current_admin
         │       ├── health.py
         │       ├── auth.py
         │       ├── categories.py
         │       ├── products.py
-        │       └── cart.py
+        │       ├── cart.py
+        │       └── orders.py
         ├── models/
         │   ├── base.py              ← TimestampedBase (id, created_at, updated_at)
         │   ├── user.py
         │   ├── category.py
         │   ├── product.py
-        │   └── cart.py              ← Cart, CartItem
+        │   ├── cart.py              ← Cart, CartItem
+        │   └── order.py             ← Order, OrderItem, Address
         └── schemas/
             ├── auth.py
             ├── category.py
             ├── product.py
-            └── cart.py
+            ├── cart.py
+            └── order.py
 ```
 
 **Layer rules:**
@@ -82,7 +92,7 @@ nova-store/
 
 ```
 users
-  id PK · email (unique, indexed) · password_hash · is_active
+  id PK · email (unique, indexed) · password_hash · is_active · role
   created_at · updated_at
 
 categories
@@ -101,6 +111,20 @@ carts
 cart_items
   id PK · cart_id FK → carts.id · product_id FK → products.id · quantity
   created_at · updated_at
+
+orders
+  id PK · user_id FK → users.id · status · total_price DECIMAL(10,2)
+  created_at · updated_at
+
+order_items
+  id PK · order_id FK → orders.id · product_id FK → products.id
+  product_name · quantity · unit_price DECIMAL(10,2)
+  created_at · updated_at
+
+addresses
+  id PK · order_id FK → orders.id (unique — one address per order)
+  full_name · line1 · line2 · city · country · postal_code
+  created_at · updated_at
 ```
 
 All models inherit from `TimestampedBase` (`__abstract__ = True`) which injects `id`, `created_at`, and `updated_at` — no extra table is created.
@@ -113,58 +137,75 @@ All models inherit from `TimestampedBase` (`__abstract__ = True`) which injects 
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/v1/auth/register` | No | Create account, returns JWT |
-| `POST` | `/api/v1/auth/login` | No | Login, returns JWT |
+| `POST` | `/api/v1/auth/register` | — | Create account, returns JWT |
+| `POST` | `/api/v1/auth/login` | — | Login, returns JWT |
 | `GET` | `/api/v1/auth/me` | Bearer | Current user profile |
 
 ### Categories
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/v1/categories` | Bearer | Create category |
-| `GET` | `/api/v1/categories` | No | List all categories |
-| `GET` | `/api/v1/categories/{id}` | No | Get single category |
-| `PUT` | `/api/v1/categories/{id}` | Bearer | Partial update |
-| `DELETE` | `/api/v1/categories/{id}` | Bearer | Delete |
+| `POST` | `/api/v1/categories` | Admin | Create category |
+| `GET` | `/api/v1/categories` | — | List all categories |
+| `GET` | `/api/v1/categories/{id}` | — | Get single category |
+| `PUT` | `/api/v1/categories/{id}` | Admin | Partial update |
+| `DELETE` | `/api/v1/categories/{id}` | Admin | Delete |
 
 ### Products
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/v1/products` | Bearer | Create product |
-| `GET` | `/api/v1/products` | No | List products (supports `?category_id` and `?search`) |
-| `GET` | `/api/v1/products/{id}` | No | Get single product |
-| `PUT` | `/api/v1/products/{id}` | Bearer | Partial update |
-| `DELETE` | `/api/v1/products/{id}` | Bearer | Delete |
+| `POST` | `/api/v1/products` | Admin | Create product |
+| `GET` | `/api/v1/products` | — | List products (`?category_id`, `?search`) |
+| `GET` | `/api/v1/products/{id}` | — | Get single product |
+| `PUT` | `/api/v1/products/{id}` | Admin | Partial update |
+| `DELETE` | `/api/v1/products/{id}` | Admin | Delete |
 
 ### Cart
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/api/v1/cart` | Bearer | Get current user's cart (auto-created if new) |
-| `POST` | `/api/v1/cart/add` | Bearer | Add product to cart |
-| `PUT` | `/api/v1/cart/update` | Bearer | Set quantity (0 removes the item) |
-| `DELETE` | `/api/v1/cart/remove` | Bearer | Remove item from cart |
+| `GET` | `/api/v1/cart` | Bearer | Get current user's cart (auto-created on first access) |
+| `POST` | `/api/v1/cart/add` | Bearer | Add product; increments qty if already in cart |
+| `PUT` | `/api/v1/cart/update` | Bearer | Set exact quantity (0 removes the item) |
+| `DELETE` | `/api/v1/cart/remove` | Bearer | Remove item |
+
+### Orders
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/orders` | Bearer | Create order from cart (clears cart on success) |
+| `GET` | `/api/v1/orders` | Bearer | List current user's orders |
+| `GET` | `/api/v1/orders/{id}` | Bearer | Order detail |
+| `PUT` | `/api/v1/orders/{id}/status` | Admin | Update order status |
+| `GET` | `/api/v1/orders/admin/all` | Admin | All orders (admin view) |
 
 ### Health
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/api/v1/health` | No | App + DB status |
+| `GET` | `/api/v1/health` | — | App + DB connectivity status |
 
 ---
 
-## Authentication
+## Authentication & Roles
 
 ### Flow
 
 ```
-POST /auth/register  →  bcrypt hash → save User → return JWT
+POST /auth/register  →  bcrypt hash → save User (role=customer) → return JWT
 POST /auth/login     →  verify hash → return JWT
 GET  /auth/me        →  decode JWT → return user profile  [protected]
 ```
 
-All write operations (POST / PUT / DELETE) and the entire Cart API require `Authorization: Bearer <token>`.
+### Roles
+
+| Role | Access |
+|------|--------|
+| `customer` | Cart, Orders (own), public read endpoints |
+| `admin` | All of the above + Category/Product writes + Order status updates + all orders list |
+
+To promote a user to admin, set `role = 'admin'` directly in the database (no public endpoint — intentional).
 
 ### JWT
 
@@ -174,94 +215,32 @@ All write operations (POST / PUT / DELETE) and the entire Cart API require `Auth
 
 Signed with **HS256**. Secret and expiry configured via environment variables.
 
-### Example
+---
 
-```bash
-# 1. Register
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "secret123"}'
+## Order Lifecycle
 
-# → { "access_token": "eyJ...", "token_type": "bearer" }
-
-# 2. Use token
-curl http://localhost:8000/api/v1/auth/me \
-  -H "Authorization: Bearer eyJ..."
 ```
+POST /orders  →  validates cart + stock  →  creates Order (status=pending)
+              →  snapshots product name + price into OrderItem
+              →  decrements product stock
+              →  saves shipping Address
+              →  clears cart
+              →  returns OrderResponse
+
+PUT /orders/{id}/status  →  admin only  →  pending → paid → shipped → cancelled
+```
+
+**Price snapshot:** `OrderItem.unit_price` stores the product's price at the time of purchase. Future price changes do not affect existing orders.
 
 ---
 
 ## Product Filtering
 
 ```bash
-GET /api/v1/products                        # all products
-GET /api/v1/products?category_id=1          # by category
-GET /api/v1/products?search=headphone       # case-insensitive name search
-GET /api/v1/products?category_id=1&search=wireless  # combined
-```
-
----
-
-## Cart System
-
-### Behaviour
-
-- Every authenticated user has exactly one cart, created automatically on first access.
-- `POST /cart/add` — adds a product. If the product is already in the cart, quantity is incremented.
-- `PUT /cart/update` — sets the quantity to an exact value. Sending `quantity: 0` removes the item.
-- `DELETE /cart/remove` — removes the item regardless of quantity.
-
-### Example
-
-```bash
-TOKEN="eyJ..."
-
-# View cart
-curl http://localhost:8000/api/v1/cart \
-  -H "Authorization: Bearer $TOKEN"
-
-# Add product
-curl -X POST http://localhost:8000/api/v1/cart/add \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"product_id": 1, "quantity": 2}'
-
-# Update quantity
-curl -X PUT http://localhost:8000/api/v1/cart/update \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"product_id": 1, "quantity": 5}'
-
-# Remove item
-curl -X DELETE http://localhost:8000/api/v1/cart/remove \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"product_id": 1}'
-```
-
-### Cart Response
-
-```json
-{
-  "id": 1,
-  "user_id": 3,
-  "items": [
-    {
-      "id": 7,
-      "product_id": 1,
-      "quantity": 2,
-      "product": {
-        "id": 1,
-        "name": "Wireless Headphones",
-        "price": 149.99,
-        "stock": 50,
-        "category": { "id": 1, "name": "Electronics", "slug": "electronics" }
-      }
-    }
-  ],
-  "created_at": "...",
-  "updated_at": "..."
-}
+GET /api/v1/products                             # all products
+GET /api/v1/products?category_id=1               # by category
+GET /api/v1/products?search=headphone            # case-insensitive name search
+GET /api/v1/products?category_id=1&search=cable  # combined
 ```
 
 ---
@@ -270,108 +249,84 @@ curl -X DELETE http://localhost:8000/api/v1/cart/remove \
 
 ### Prerequisites
 
-- Microsoft SQL Server (any edition) running on your machine or network
+- Microsoft SQL Server (any edition) running locally
 - [ODBC Driver 17 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) installed
-- The `sa` account (or any login with `dbcreator` role) enabled and password set
 
 ### Step 1 — Configure .env
 
 ```bash
 cd backend
-cp .env.example .env
+copy .env.example .env
 ```
 
-Edit `.env` and fill in your real values:
+Edit `.env`:
 
 ```env
-DB_SERVER=localhost          # or your SQL Server hostname / IP
-DB_PORT=1433
-DB_NAME=nova_store
-DB_USER=sa
-DB_PASSWORD=your_real_password
+DB_SERVER=localhost\SQLEXPRESS     # or your instance name
+DB_NAME=NovaStoreDB
 DB_DRIVER=ODBC Driver 17 for SQL Server
+DB_TRUSTED_CONNECTION=true         # Windows Auth (recommended for local dev)
+JWT_SECRET_KEY=your-secret-here
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=60
+```
+
+If using SQL Server authentication (username + password) instead:
+
+```env
+DB_TRUSTED_CONNECTION=false
+DB_USER=sa
+DB_PASSWORD=your_password
 ```
 
 ### Step 2 — Create the database
 
-**Option A — Python script (recommended)**
-
 ```bat
-cd backend
 py scripts/create_db.py
 ```
-
-The script connects to the `master` database using the credentials in `.env`, checks whether `nova_store` exists, and creates it if it does not. Safe to run multiple times.
-
-**Option B — SQL script (SSMS or sqlcmd)**
-
-Open `backend/scripts/create_db.sql` in SQL Server Management Studio and execute it, or run:
-
-```bat
-sqlcmd -S localhost -U sa -P your_password -i scripts/create_db.sql
-```
-
-**Option C — SSMS manually**
-
-Right-click **Databases → New Database**, enter `nova_store`, click OK.
 
 ### Step 3 — Apply migrations
 
 ```bat
-cd backend
 alembic upgrade head
 ```
-
-This runs all pending migration files in `alembic/versions/` in order and creates the following tables:
 
 | Migration | Tables created |
 |---|---|
 | `0001_initial_tables` | `users`, `categories`, `products` |
 | `0002_add_cart_tables` | `carts`, `cart_items` |
+| `0003_role_and_order_tables` | `role` column on `users`, `orders`, `order_items`, `addresses` |
 
-### Step 4 — Verify tables
+### Step 4 — Verify
 
 ```bat
 py scripts/verify_tables.py
-```
-
-Expected output:
-
-```
-  ✓  users
-  ✓  categories
-  ✓  products
-  ✓  carts
-  ✓  cart_items
-
-All expected tables are present.
 ```
 
 ---
 
 ## Running the Backend
 
-> **Windows note:** use `py` instead of `python`, and `venv\Scripts\activate` instead of `source venv/bin/activate`.
+> **Windows:** use `py` instead of `python`, and `venv\Scripts\activate` in CMD or `source venv/Scripts/activate` in Git Bash.
 
 ```bat
 cd backend
 py -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-rem Complete Database Setup steps above first
+py scripts/create_db.py
+alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-API → `http://localhost:8000`
+API → `http://localhost:8000`  
 Docs → `http://localhost:8000/docs`
 
-Generate a secure JWT secret key:
+Generate a secure JWT key:
 
 ```bat
 py -c "import secrets; print(secrets.token_hex(32))"
 ```
-
-Paste the output as `JWT_SECRET_KEY` in your `.env`.
 
 ---
 
@@ -384,43 +339,45 @@ alembic revision --autogenerate -m "describe your change"
 # Apply all pending migrations
 alembic upgrade head
 
-# Roll back one migration
+# Roll back one step
 alembic downgrade -1
 
-# Check current migration state
+# Check current state
 alembic current
 ```
-
-Alembic discovers all tables automatically because `alembic/env.py` imports `app.models` before reading `Base.metadata`. Any new model added to `app/models/` will be picked up by `autogenerate` without extra registration.
 
 ---
 
 ## Environment Variables
 
-| Variable             | Default   | Description                          |
-|----------------------|-----------|--------------------------------------|
-| `DB_SERVER`          | —         | MSSQL hostname                       |
-| `DB_PORT`            | `1433`    | MSSQL port                           |
-| `DB_NAME`            | —         | Database name                        |
-| `DB_USER`            | —         | Username                             |
-| `DB_PASSWORD`        | —         | *(never commit)*                     |
-| `DB_DRIVER`          | —         | ODBC driver name                     |
-| `JWT_SECRET_KEY`     | —         | JWT signing key *(never commit)*     |
-| `JWT_ALGORITHM`      | `HS256`   | Signing algorithm                    |
-| `JWT_EXPIRE_MINUTES` | `60`      | Token lifetime in minutes            |
-| `DEBUG`              | `false`   | Enables SQL query logging            |
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DB_SERVER` | ✓ | — | SQL Server hostname or `host\instance` |
+| `DB_NAME` | ✓ | — | Database name |
+| `DB_DRIVER` | — | `ODBC Driver 17 for SQL Server` | ODBC driver name |
+| `DB_TRUSTED_CONNECTION` | — | `false` | Use Windows Authentication |
+| `DB_USER` | * | — | SQL login username (*if not using trusted connection) |
+| `DB_PASSWORD` | * | — | SQL login password *(never commit)* |
+| `JWT_SECRET_KEY` | ✓ | — | JWT signing key *(never commit)* |
+| `JWT_ALGORITHM` | — | `HS256` | Signing algorithm |
+| `JWT_EXPIRE_MINUTES` | — | `60` | Token lifetime in minutes |
+| `DEBUG` | — | `false` | Enables SQL query logging |
 
 ---
 
 ## Roadmap
 
 - [x] Backend foundation (FastAPI + MSSQL + SQLAlchemy + Alembic)
-- [x] Database models (User, Category, Product, Cart, CartItem)
-- [x] Authentication (register, login, JWT, /me)
-- [x] Category CRUD API
-- [x] Product CRUD API (search + filter)
-- [x] Shopping cart API
-- [ ] Order system
+- [x] Database models (User, Category, Product, Cart, CartItem, Order, OrderItem, Address)
+- [x] Authentication (register, login, JWT)
+- [x] Role-based access control (customer / admin)
+- [x] Category CRUD (admin-protected writes)
+- [x] Product CRUD (search + filter, admin-protected writes)
+- [x] Shopping cart
+- [x] Order system (create from cart, price snapshot, status lifecycle)
+- [ ] CORS middleware
+- [ ] Pagination
+- [ ] Product images
 - [ ] React web frontend
 - [ ] Flutter mobile app
 - [ ] AI features
