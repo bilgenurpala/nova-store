@@ -156,7 +156,7 @@ All models inherit from `TimestampedBase` (`__abstract__ = True`) which injects 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `POST` | `/api/v1/products` | Admin | Create product |
-| `GET` | `/api/v1/products` | — | List products (`?category_id`, `?search`) |
+| `GET` | `/api/v1/products` | — | List products (`?category_id`, `?search`, `?skip`, `?limit`) |
 | `GET` | `/api/v1/products/{id}` | — | Get single product |
 | `PUT` | `/api/v1/products/{id}` | Admin | Partial update |
 | `DELETE` | `/api/v1/products/{id}` | Admin | Delete |
@@ -237,10 +237,11 @@ PUT /orders/{id}/status  →  admin only  →  pending → paid → shipped → 
 ## Product Filtering
 
 ```bash
-GET /api/v1/products                             # all products
-GET /api/v1/products?category_id=1               # by category
-GET /api/v1/products?search=headphone            # case-insensitive name search
-GET /api/v1/products?category_id=1&search=cable  # combined
+GET /api/v1/products                                   # all products (first 20)
+GET /api/v1/products?category_id=1                     # by category
+GET /api/v1/products?search=headphone                  # case-insensitive name search
+GET /api/v1/products?category_id=1&search=cable        # combined
+GET /api/v1/products?skip=20&limit=20                  # page 2
 ```
 
 ---
@@ -375,9 +376,11 @@ alembic current
 - [x] Product CRUD (search + filter, admin-protected writes)
 - [x] Shopping cart
 - [x] Order system (create from cart, price snapshot, status lifecycle)
-- [ ] CORS middleware
-- [ ] Pagination
-- [ ] Product images
+- [x] CORS middleware
+- [x] Pagination (skip/limit on products and categories)
+- [x] Product images (URL-based, primary flag)
+- [x] Seed data script
+- [x] Docker (Dockerfile + docker-compose)
 - [ ] React web frontend
 - [ ] Flutter mobile app
 - [ ] AI features

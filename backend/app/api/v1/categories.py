@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.dependencies import get_current_admin
@@ -36,8 +36,12 @@ def create_category(
 
 
 @router.get("", response_model=list[CategoryResponse])
-def list_categories(db: Session = Depends(get_db)):
-    return db.query(Category).order_by(Category.name).all()
+def list_categories(
+    db: Session = Depends(get_db),
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=100, ge=1, le=200, description="Max records to return"),
+):
+    return db.query(Category).order_by(Category.name).offset(skip).limit(limit).all()
 
 
 @router.get("/{category_id}", response_model=CategoryResponse)

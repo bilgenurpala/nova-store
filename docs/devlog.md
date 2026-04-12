@@ -1,423 +1,452 @@
 # Nova Store — Development Log
 
-Bu devlog, Nova Store projesinin gün gün gelişim notlarını içerir. Sadece "ne yaptık" değil, "neden bu kararı aldık" ve "bu kavram ne anlama geliyor" sorularına da cevap verir. Ders notu gibi kullanabilirsin.
+Each day entry is written in both **English** and **Turkish**.  
+Her günün notları hem **İngilizce** hem **Türkçe** yazılmıştır.
 
 ---
 
-## Day 1 · 2026-04-07 — Backend Foundation
+## Day 1 · 2026-04-07 — Backend Foundation / Temel Altyapı
+
+### Summary
+The goal of this day was not to write business logic, but to build the foundation everything else will stand on: folder structure, configuration layer, database connectivity, ORM setup, migration tooling, and a live health check endpoint.
 
 ### Özet
-
-Kod yazmadan önce zemin kuruldu. Bu gün boyunca hiçbir iş mantığı (business logic) yazılmadı — yalnızca projenin her şeyin üzerine inşa edileceği iskelet oluşturuldu: klasör yapısı, konfigürasyon katmanı, veritabanı bağlantısı, ORM kurulumu, migration sistemi ve sağlık kontrolü endpoint'i.
+Bu günün amacı iş mantığı yazmak değil, her şeyin üzerine inşa edileceği zemini kurmaktı: klasör yapısı, konfigürasyon katmanı, veritabanı bağlantısı, ORM kurulumu, migration sistemi ve canlı sağlık kontrolü endpoint'i.
 
 ---
 
-### Ne Yaptık
+### What We Did / Ne Yaptık
 
-- Tam backend klasör hiyerarşisi oluşturuldu
-- `config.py` — Pydantic Settings ile `.env` okuma + MSSQL bağlantı URL'i dinamik yapı
-- `database.py` — SQLAlchemy engine, bağlantı havuzu, `SessionLocal`, `Base`, `get_db()`
-- `main.py` — FastAPI uygulaması, versiyonlu router kaydı
-- `health.py` — `GET /api/v1/health` — canlı DB bağlantı testi
-- `alembic.ini` + `alembic/env.py` — Alembic aynı settings nesnesinden DB URL'ini okur
-- `requirements.txt` sabit versiyonlarla
-- `.env.example` — güvenli konfigürasyon şablonu
+- `config.py` — Pydantic Settings; reads `.env`, builds MSSQL connection URL dynamically / `.env` okur, MSSQL bağlantı URL'ini dinamik olarak oluşturur
+- `database.py` — SQLAlchemy engine with connection pooling, `SessionLocal`, `Base`, `get_db()` / Bağlantı havuzlu engine, oturum fabrikası, temel sınıf
+- `main.py` — FastAPI app with versioned router registration / Versiyonlu router kaydıyla FastAPI uygulaması
+- `health.py` — `GET /api/v1/health` with live DB connectivity probe / Canlı DB bağlantı testi içeren health endpoint
+- `alembic.ini` + `alembic/env.py` — Alembic reads DB URL from settings / Alembic, DB URL'ini settings nesnesinden okur
+- `requirements.txt` with pinned versions / Sabitlenmiş versiyonlarla bağımlılık listesi
+- `.env.example` — safe configuration template / Güvenli konfigürasyon şablonu
 - `.gitignore`
 
 ---
 
-### 📚 Temel Kavramlar
+### Key Concepts / Temel Kavramlar
 
-**Pydantic Settings nedir ve neden `os.getenv()` yerine kullanırız?**
-
-`os.getenv("DB_PORT")` her zaman `str` döner. `DB_PORT` bir integer olması gerekiyorsa bunu kendin dönüştürmek zorundasın, yoksa uygulama çalışma zamanında patlar. Pydantic Settings'de şunu yazarsın:
-
+#### Pydantic Settings
+**EN:** `os.getenv("DB_PORT")` always returns a `str`. If the field should be an integer, you have to cast it yourself — and if someone puts `DB_PORT=abc` in `.env`, the app crashes at runtime with a confusing error. Pydantic Settings declares types upfront:
 ```python
 DB_PORT: int = 1433
 ```
+It reads the `.env` file, automatically coerces `"1433"` to `int`, and if the value is invalid it raises a clear validation error at **startup** — not at runtime. This is type safety applied to configuration.
 
-Pydantic `.env` dosyasını okur, `"1433"` string'ini otomatik `int`'e dönüştürür, ve eğer `.env`'de `DB_PORT=abc` gibi geçersiz bir değer varsa uygulama daha başlamadan açık bir hata mesajıyla durur. Type safety — runtime'da değil, startup'ta hata yakala.
-
-**ORM nedir?**
-
-ORM (Object-Relational Mapper), veritabanı tablolarını Python sınıflarına, satırları ise nesne instance'larına çevirir. Yani `SELECT * FROM users WHERE id = 1` yazmak yerine `db.get(User, 1)` yazarsın. SQLAlchemy bu dönüşümü yapar.
-
-**Alembic nedir ve neden migration lazım?**
-
-Üretim ortamında çalışan bir veritabanı var. Modele yeni bir sütun ekledin. Bu sütunu canlı DB'ye nasıl yansıtacaksın? Sıfırdan yaratmak mümkün değil — içinde data var. Alembic, model değişikliklerini sıralı, geri alınabilir migration dosyalarına dönüştürür. `alembic upgrade head` ile tüm değişiklikler sırayla uygulanır, `alembic downgrade -1` ile geri alınır.
-
-**Bağlantı havuzu (connection pool) nedir?**
-
-Her HTTP isteğinde veritabanına yeni bir TCP bağlantısı açmak pahalıdır. Connection pool, önceden açılmış bağlantıları bekletir ve istekler geldiğinde onlara verir. `pool_size=10` — sürekli açık tutulan bağlantı sayısı. `max_overflow=20` — ani yük artışında açılabilecek ekstra bağlantı sayısı. `pool_pre_ping=True` — bağlantıyı kullanmadan önce "hâlâ canlı mı?" diye kontrol eder, stale connection hatasını önler.
+**TR:** `os.getenv("DB_PORT")` her zaman `str` döner. Alan bir integer olması gerekiyorsa kendin dönüştürmek zorundasın — ve birisi `.env`'e `DB_PORT=abc` yazarsa uygulama çalışma zamanında kafa karıştırıcı bir hatayla patlar. Pydantic Settings tipleri baştan tanımlar: `DB_PORT: int = 1433`. `.env` dosyasını okur, `"1433"` string'ini otomatik `int`'e çevirir, değer geçersizse **başlangıçta** açık bir hata mesajı verir — runtime'da değil. Bu, konfigürasyona uygulanmış type safety'dir.
 
 ---
 
-### Teknik Kararlar
+#### ORM (Object-Relational Mapper)
+**EN:** An ORM maps database tables to Python classes and rows to object instances. Instead of writing `SELECT * FROM users WHERE id = 1`, you write `db.get(User, 1)`. SQLAlchemy handles this translation. The benefit: you write Python, not SQL, and database-specific syntax differences disappear.
 
-| Karar | Gerekçe |
+**TR:** ORM, veritabanı tablolarını Python sınıflarına ve satırları nesne instance'larına eşler. `SELECT * FROM users WHERE id = 1` yazmak yerine `db.get(User, 1)` yazarsın. SQLAlchemy bu dönüşümü yapar. Faydası: Python yazarsın, SQL değil; veritabanına özgü sözdizimi farkları ortadan kalkar.
+
+---
+
+#### Alembic & Database Migrations
+**EN:** A production database has data in it. If you add a new column to a model, you can't just recreate the database — the data would be lost. Alembic converts model changes into ordered, reversible migration files. `alembic upgrade head` applies all pending migrations in sequence. `alembic downgrade -1` rolls back one step. Every schema change is tracked and reproducible.
+
+**TR:** Production veritabanında data var. Modele yeni sütun eklersen, veritabanını sıfırdan yaratman mümkün değil — data silinir. Alembic, model değişikliklerini sıralı ve geri alınabilir migration dosyalarına çevirir. `alembic upgrade head` bekleyen tüm migration'ları sırayla uygular. `alembic downgrade -1` bir adım geri alır. Her şema değişikliği izlenir ve tekrarlanabilir.
+
+---
+
+#### Connection Pooling / Bağlantı Havuzu
+**EN:** Opening a new TCP connection to the database on every HTTP request is expensive. A connection pool keeps a set of open connections ready and hands them to requests as needed. `pool_size=10` — connections kept open at all times. `max_overflow=20` — extra connections opened during traffic spikes. `pool_pre_ping=True` — validates each connection before use to prevent stale connection errors.
+
+**TR:** Her HTTP isteğinde veritabanına yeni TCP bağlantısı açmak pahalıdır. Bağlantı havuzu, önceden açılmış bağlantıları bekletir ve istekler geldiğinde onlara verir. `pool_size=10` — her zaman açık tutulan bağlantı sayısı. `max_overflow=20` — ani yük artışında açılabilecek ekstra bağlantı sayısı. `pool_pre_ping=True` — her bağlantıyı kullanmadan önce doğrular, stale connection hatasını önler.
+
+---
+
+### Technical Decisions / Teknik Kararlar
+
+| Decision / Karar | Rationale / Gerekçe |
 |---|---|
-| `pydantic-settings` ile konfigürasyon | Type-safe, startup'ta doğrulanmış, `.env`'den gerçek env var'a sıfır değişiklikle geçiş |
-| `@lru_cache` ile `get_settings()` | Settings nesnesi bir kez oluşturulur, her request'te `.env` yeniden okunmaz |
-| `pool_pre_ping=True` | Kullanımdan önce bağlantı doğrulanır, stale connection hatası önlenir |
-| `echo=settings.DEBUG` | SQL sorguları DEBUG modunda terminale yazdırılır, production'da sessiz |
-| `api/v1/` namespace | Gelecekte `/api/v2/` çıkabilir; web ve mobil client'lar kırılmadan yeni versiyon paralel çalışır |
-| `models/` ve `schemas/` ayrımı | ORM modeli DB şeklini bilir; Pydantic şeması API kontratını bilir — bağımsız evrilirler |
+| `pydantic-settings` for config / konfigürasyon için | Type-safe, validated at startup / Tip güvenli, başlangıçta doğrulanır |
+| `@lru_cache` on `get_settings()` | Settings created once, not re-read on every request / Bir kez oluşturulur, her istekte yeniden okunmaz |
+| `pool_pre_ping=True` | Prevents stale connection errors / Stale bağlantı hatalarını önler |
+| `echo=settings.DEBUG` | SQL logs only in DEBUG mode / SQL logları yalnızca DEBUG modunda |
+| `api/v1/` namespace | Allows future `/api/v2/` without breaking clients / Mevcut client'ları kırmadan `/api/v2/` çıkarmayı sağlar |
+| Separate `models/` and `schemas/` | ORM models own DB shape; Pydantic schemas own API contract / ORM modeli DB şeklini, Pydantic şeması API kontratını yönetir |
 
 ---
 
-### Karşılaşılan Sorunlar
+### Issues & Fixes / Sorunlar ve Çözümler
 
-- MSSQL bağlantı string'inde pyodbc driver adındaki boşluklar URL-encode edilmeli (`ODBC Driver 17` → `ODBC+Driver+17`). `DATABASE_URL` property'sinde `.replace(" ", "+")` ile çözüldü.
-- Alembic'in `env.py`'ı `app` paketini `sys.path`'te bulamazsa import hatası verir. `sys.path.insert(0, ...)` ile çözüldü.
+**EN:** MSSQL connection strings with pyodbc require spaces in the driver name to be URL-encoded (`ODBC Driver 17` → `ODBC+Driver+17`). Solved in the `DATABASE_URL` property with `.replace(" ", "+")`. Alembic's `env.py` needs the `app` package on `sys.path` — solved with `sys.path.insert(0, ...)`.
 
----
-
-### Tamamlananlar → Sonraki Gün
-
-- [x] SQLAlchemy model base mixin (`id`, `created_at`, `updated_at`)
-- [x] `User`, `Category`, `Product` modelleri
-- [x] İlk Alembic migration
+**TR:** pyodbc'de MSSQL bağlantı string'inde driver adındaki boşluklar URL-encode edilmeli (`ODBC Driver 17` → `ODBC+Driver+17`). `DATABASE_URL` property'sinde `.replace(" ", "+")` ile çözüldü. Alembic'in `env.py`'ı `app` paketini `sys.path`'te bulamazsa import hatası verir — `sys.path.insert(0, ...)` ile çözüldü.
 
 ---
 
-## Day 2 · 2026-04-07 — Database Models
+## Day 2 · 2026-04-07 — Database Models / Veritabanı Modelleri
+
+### Summary
+Bug fixes on the Day 1 foundation, then full database model layer: shared `TimestampedBase` mixin, `User`, `Category`, and `Product` ORM models with relationships, and the initial Alembic migration.
 
 ### Özet
-
-Bug düzeltmeleri + tam veritabanı model katmanı: paylaşılan `TimestampedBase` mixin, `User`, `Category`, `Product` ORM modelleri, ilişkiler ve ilk Alembic migration dosyası.
+Gün 1 altyapısındaki bug düzeltmeleri, ardından tam veritabanı model katmanı: paylaşılan `TimestampedBase` mixin, `User`, `Category` ve `Product` ORM modelleri ilişkilerle birlikte ve ilk Alembic migration.
 
 ---
 
-### Ne Yaptık
+### What We Did / Ne Yaptık
 
-- `app/models/base.py` — `TimestampedBase` abstract sınıf: `id` (PK, autoincrement), `created_at`, `updated_at`
+- `app/models/base.py` — `TimestampedBase`: `id` (PK, autoincrement), `created_at`, `updated_at`
 - `app/models/user.py` — `User`: `email` (unique, indexed), `password_hash`, `is_active`
 - `app/models/category.py` — `Category`: `name` (unique), `slug` (unique, indexed), `products` relationship
 - `app/models/product.py` — `Product`: `name`, `description` (nullable), `price` (`DECIMAL(10,2)`), `stock`, `category_id` FK
-- `app/models/__init__.py` — tüm modeller import edilerek `Base.metadata`'ya kaydedilir
-- `alembic/versions/20260407_0001_initial_tables.py` — `users`, `categories`, `products` tablolarını oluşturur
-- `alembic/env.py` — `app.models` import'u eklendi
+- `app/models/__init__.py` — imports all models so they register with `Base.metadata` / tüm modeller `Base.metadata`'ya kaydedilmek için import edilir
+- `alembic/versions/20260407_0001_initial_tables.py` — creates `users`, `categories`, `products`
+- `alembic/env.py` — patched to import `app.models` before reading metadata / metadata okunmadan önce `app.models` import edilecek şekilde güncellendi
 
 ---
 
-### Bug Düzeltmeleri
+### Bug Fixes / Bug Düzeltmeleri
 
-| Dosya | Hata | Çözüm |
+| File / Dosya | Bug | Fix / Çözüm |
 |---|---|---|
-| `alembic/env.py` | `Base.metadata` boştu — hiçbir model import edilmemişti, `autogenerate` boş migration üretiyordu | `target_metadata = Base.metadata` satırından önce `import app.models` eklendi |
-| `backend/.env` | Dosya yoktu, uygulama başlarken Pydantic validation hatası veriyordu | `.env.example`'dan `.env` oluşturuldu |
+| `alembic/env.py` | `Base.metadata` was empty — no models imported, autogenerate produced empty migration / Hiçbir model import edilmemişti, autogenerate boş migration üretiyordu | Added `import app.models` before `target_metadata` / `target_metadata`'dan önce `import app.models` eklendi |
+| `backend/.env` | File didn't exist — Pydantic validation error at startup / Dosya yoktu, Pydantic başlangıçta hata veriyordu | Created from `.env.example` / `.env.example`'dan oluşturuldu |
 
 ---
 
-### 📚 Temel Kavramlar
+### Key Concepts / Temel Kavramlar
 
-**`__abstract__ = True` ve Mixin Paterni**
+#### `__abstract__ = True` and the Mixin Pattern / Mixin Paterni
 
-`TimestampedBase`'i doğrudan `users` gibi bir tabloya dönüştürmek istemiyoruz. Sadece `id`, `created_at`, `updated_at` sütunlarını tüm modellere enjekte etmek istiyoruz. `__abstract__ = True` diyince SQLAlchemy bu sınıf için veritabanında tablo oluşturmaz. Her model bu sınıftan inherit edince o sütunları otomatik alır. DRY (Don't Repeat Yourself) — her modelde aynı sütunları tekrar tekrar yazmana gerek yok.
+**EN:** We don't want `TimestampedBase` to create a database table — we just want it to inject `id`, `created_at`, `updated_at` into every model. `__abstract__ = True` tells SQLAlchemy: don't create a table for this class. Every model that inherits from it gets those columns automatically. This is the DRY principle (Don't Repeat Yourself) applied to database models.
 
-**`server_default` vs `default`**
-
-`default=func.now()` dersen: Python değeri hesaplar ve SQL sorgusuna parametre olarak ekler.  
-`server_default=func.now()` dersen: SQL Server'a `DEFAULT GETDATE()` kısıtlaması eklenir. Veritabanı kendisi bu değeri set eder. ORM bypass edilerek doğrudan SQL ile insert yapılsa bile timestamp doğru girilir.
-
-**Veritabanı Tipi: `Numeric(10, 2)` vs `Float`**
-
-`Float` binary floating point kullanır. `149.99` gibi bir fiyatı binary'de tam temsil edemezsin. `0.1 + 0.2 = 0.30000000004` gibi sonuçlar alabilirsin. Bu finansal veride felaket demektir. `Numeric(10, 2)` exact decimal arithmetic kullanır. Toplam 10 basamak, virgülden sonra 2 basamak. Para her zaman `Numeric` ile saklanır.
-
-**`TYPE_CHECKING` ile Circular Import Çözümü**
-
-`category.py`'da `Product`'a referans var (relationship için), `product.py`'da `Category`'ye referans var. İkisi birbirini import etmeye çalışırsa Python sonsuz döngüye girer. Çözüm:
-
-```python
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from app.models.product import Product
-```
-
-`TYPE_CHECKING` yalnızca IDE ve mypy gibi static analyzer çalışırken `True` olur. Runtime'da `False`'tur, dolayısıyla o import bloğu hiç çalışmaz. Relationship string ile tanımlanır: `relationship("Product")`. SQLAlchemy string adından sınıfı runtime'da bulur.
+**TR:** `TimestampedBase`'in bir veritabanı tablosu oluşturmasını istemiyoruz — sadece `id`, `created_at`, `updated_at`'ı her modele enjekte etmesini istiyoruz. `__abstract__ = True` SQLAlchemy'ye şunu söyler: bu sınıf için tablo oluşturma. O sınıftan miras alan her model bu sütunları otomatik alır. Bu, veritabanı modellerine uygulanmış DRY (Kendini Tekrar Etme) prensibidir.
 
 ---
 
-### Teknik Kararlar
+#### `server_default` vs `default`
 
-| Karar | Gerekçe |
+**EN:** `default=func.now()` — Python calculates the value and sends it as a query parameter. `server_default=func.now()` — SQLAlchemy adds a `DEFAULT GETDATE()` constraint to the column definition. The database sets the value itself. Even rows inserted outside the ORM (raw SQL, migrations) get correct timestamps.
+
+**TR:** `default=func.now()` — Python değeri hesaplar ve SQL sorgusuna parametre olarak gönderir. `server_default=func.now()` — SQLAlchemy sütun tanımına `DEFAULT GETDATE()` kısıtlaması ekler. Veritabanı değeri kendisi set eder. ORM bypass edilerek yapılan insert'lerde (raw SQL, migration) bile timestamp doğru girilir.
+
+---
+
+#### `Numeric(10, 2)` vs `Float` for Price / Fiyat İçin
+
+**EN:** `Float` uses binary floating-point. It cannot exactly represent `149.99` in binary. You can end up with `0.1 + 0.2 = 0.30000000004`. In financial data, this is catastrophic. `Numeric(10, 2)` uses exact decimal arithmetic: 10 total digits, 2 after the decimal point. Money is always stored with `Numeric`.
+
+**TR:** `Float` binary floating point kullanır. `149.99` gibi bir sayıyı binary'de tam olarak temsil edemez. `0.1 + 0.2 = 0.30000000004` gibi sonuçlar çıkabilir. Finansal veride bu felaket demektir. `Numeric(10, 2)` exact decimal arithmetic kullanır: toplam 10 basamak, virgülden sonra 2. Para her zaman `Numeric` ile saklanır.
+
+---
+
+#### `TYPE_CHECKING` Circular Import Guard
+
+**EN:** `category.py` references `Product` (for the relationship), `product.py` references `Category`. If they import each other directly, Python enters an infinite loop. The solution: wrap the import in `if TYPE_CHECKING:` — this block only runs during static analysis (mypy, IDE), never at runtime. The relationship is defined as a string: `relationship("Product")`. SQLAlchemy resolves the string to the class at runtime.
+
+**TR:** `category.py`, `Product`'a referans veriyor (relationship için); `product.py`, `Category`'ye referans veriyor. İkisi birbirini doğrudan import etmeye çalışırsa Python sonsuz döngüye girer. Çözüm: import'u `if TYPE_CHECKING:` bloğuna sar — bu blok yalnızca statik analiz sırasında (mypy, IDE) çalışır, runtime'da asla. Relationship string olarak tanımlanır: `relationship("Product")`. SQLAlchemy bu string'i runtime'da sınıfa çözer.
+
+---
+
+### Technical Decisions / Teknik Kararlar
+
+| Decision / Karar | Rationale / Gerekçe |
 |---|---|
-| `TimestampedBase` (`__abstract__ = True`) | Paylaşılan sütunlar her modele enjekte edilir, `timestampedbase` tablosu oluşmaz |
-| `server_default=func.now()` | DB timestamp'i set eder — ORM dışı insertlarda da çalışır |
-| `onupdate=func.now()` | SQLAlchemy her ORM flush'ta `updated_at`'ı günceller |
-| `Numeric(10, 2)` fiyat için | Exact decimal — finansal hesaplamalarda float'ın yuvarlama hatalarını önler |
-| `category_id` products'ta indexed | Kategoriye göre filtreleme sık yapılır — index tam tablo taramasını önler |
-| Migration elle yazıldı | Canlı DB yoktu; migration autogenerate'in MSSQL'e karşı ürettiğiyle birebir aynı |
+| `TimestampedBase` with `__abstract__ = True` | Shared columns injected, no extra table / Paylaşılan sütunlar enjekte edilir, ekstra tablo oluşmaz |
+| `server_default` for timestamps | DB sets value — works even outside ORM / DB değeri set eder, ORM dışında da çalışır |
+| `Numeric(10, 2)` for price | Exact decimal, no floating-point rounding errors / Kesin decimal, yuvarlama hatası yok |
+| `TYPE_CHECKING` import guards | Prevents circular imports at runtime / Runtime'da circular import'ları önler |
+| `category_id` indexed on products | Frequent filter by category — index prevents full table scan / Kategoriye göre sık filtreleme, index tam tablo taramasını önler |
 
 ---
 
-### Karşılaşılan Sorunlar
+## Day 3 · 2026-04-08 — Authentication / Kimlik Doğrulama
 
-- MSSQL `GETDATE()` kullanır, diğer DB'ler `now()`. Migration dosyasında `sa.text("GETDATE()")` kullanmak gerekti.
-- SQLAlchemy 2.x bidirectional `relationship()` circular import yaratır. `TYPE_CHECKING` guard ile çözüldü.
-
----
-
-## Day 3 · 2026-04-08 — Authentication
+### Summary
+Full JWT-based authentication system: password hashing with bcrypt, JWT token creation and decoding, register and login endpoints, and a protected `/me` endpoint. JWT configuration moved to `Settings` so secrets stay in `.env`.
 
 ### Özet
-
-Tam JWT tabanlı authentication sistemi: bcrypt ile şifre hashleme, JWT token oluşturma/doğrulama, register/login endpoint'leri ve korumalı `/me` endpoint'i. JWT konfigürasyonu `.env`'e taşındı.
+Tam JWT tabanlı kimlik doğrulama sistemi: bcrypt ile şifre hashleme, JWT token oluşturma ve çözme, kayıt ve giriş endpoint'leri ve korumalı `/me` endpoint'i. JWT konfigürasyonu `Settings`'e taşındı, sırlar `.env`'de kalır.
 
 ---
 
-### Ne Yaptık
+### What We Did / Ne Yaptık
 
 - `app/core/security.py` — `hash_password`, `verify_password` (bcrypt), `create_access_token`, `decode_access_token` (HS256)
 - `app/schemas/auth.py` — `RegisterRequest`, `LoginRequest`, `TokenResponse`, `UserResponse`
-- `app/api/v1/dependencies.py` — `get_current_user`: Bearer token'ı decode eder, User'ı DB'den çeker, 401/403 raise eder
+- `app/api/v1/dependencies.py` — `get_current_user`: decodes Bearer token, loads User, raises 401/403
 - `app/api/v1/auth.py` — `POST /register`, `POST /login`, `GET /me`
-- `app/core/config.py` — `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES` eklendi
+- `app/core/config.py` — `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES` added / eklendi
 
 ---
 
-### 📚 Temel Kavramlar
+### Key Concepts / Temel Kavramlar
 
-**Neden şifreyi plaintext saklamayız?**
+#### Why Not Store Plaintext Passwords? / Neden Plaintext Şifre Saklanmaz?
 
-Kullanıcı şifresini `password = "abc123"` olarak veritabanına yazsan, bir SQL injection veya DB sızıntısında herkesin şifresine erişilir. bcrypt, şifreyi geri döndürülemez (one-way) bir hash'e çevirir. `hash_password("abc123")` → `"$2b$12$eImiTXuWVxfM37..."`. Bu hash'ten "abc123"e geri dönemezsin. Login'de: kullanıcının girdiği şifreyi hash'le ve sakladığın hash ile karşılaştır.
+**EN:** If you store `password = "abc123"` in the database and the DB is compromised, every user's password is exposed instantly. bcrypt converts a password into an irreversible (one-way) hash: `hash_password("abc123")` → `"$2b$12$eImiTX..."`. You cannot get `"abc123"` back from this hash. At login: hash the submitted password and compare against the stored hash.
 
-**Salt nedir?**
+**TR:** Veritabanında `password = "abc123"` saklarsan ve DB ele geçirilirse, herkesin şifresi anında açığa çıkar. bcrypt, şifreyi geri döndürülemez (one-way) bir hash'e çevirir: `hash_password("abc123")` → `"$2b$12$eImiTX..."`. Bu hash'ten `"abc123"`'e geri dönemezsin. Login'de: girilen şifreyi hashle ve saklanan hash ile karşılaştır.
 
-Aynı şifreye her zaman aynı hash çıkmasaydı ne olurdu? "abc123" için önceden hesaplanmış hash tabloları (rainbow tables) saldırılarını engeller. bcrypt otomatik random salt üretir ve hash'e gömer. Her `hash_password("abc123")` çağrısı farklı bir hash üretir ama `verify_password("abc123", hash)` hepsinde `True` döner.
+---
 
-**JWT nedir?**
+#### What is a Salt? / Salt Nedir?
 
-JWT (JSON Web Token), üç parçadan oluşur: `header.payload.signature`. Header algoritma bilgisi içerir. Payload claims içerir — `{"sub": "user@example.com", "exp": 1234567890}`. Signature, header + payload'ın secret key ile HMAC-SHA256 imzasıdır.
+**EN:** Without a salt, the same password always produces the same hash. An attacker could pre-compute a hash table for common passwords (rainbow table attack). bcrypt automatically generates a random salt and embeds it in the hash. Each `hash_password("abc123")` call produces a different hash, but `verify_password("abc123", any_of_those_hashes)` returns `True` for all of them.
 
-Sunucu JWT'yi verir ve saklamaz. İstek geldiğinde signature'ı doğrular — imza geçerliyse token gerçektir. Bu "stateless auth" demektir: sunucunun session tablosu tutmasına gerek yok.
+**TR:** Salt olmadan, aynı şifre her zaman aynı hash'i üretir. Saldırgan yaygın şifreler için önceden hash tabloları hesaplayabilir (rainbow table saldırısı). bcrypt otomatik olarak rastgele bir salt üretir ve hash'e gömer. Her `hash_password("abc123")` çağrısı farklı bir hash üretir, ama `verify_password("abc123", hash)` hepsinde `True` döner.
 
-**HS256 vs RS256**
+---
 
-HS256: tek bir secret key hem imzalar hem doğrular. Basit, hızlı. Birden fazla servisin doğrulaması gerekiyorsa secret'ı herkesle paylaşmak zorundayız — güvenlik riski.  
-RS256: private key imzalar, public key doğrular. Public key'i herkesle paylaşabilirsin. Microservice mimarisinde tercih edilir. Şimdilik HS256 yeterli.
+#### What is JWT? / JWT Nedir?
 
-**FastAPI Dependency Injection — `Depends()`**
+**EN:** JWT (JSON Web Token) has three parts: `header.payload.signature`. The header contains algorithm info. The payload contains claims: `{"sub": "user@example.com", "exp": 1234567890}`. The signature is an HMAC-SHA256 of header + payload using the secret key. The server issues the JWT and does not store it. On each request, it verifies the signature — if valid, the token is authentic. This is **stateless auth**: no session table needed on the server.
 
-FastAPI'de route handler'lar parametre olarak dependency fonksiyonları alabilir:
+**TR:** JWT (JSON Web Token) üç parçadan oluşur: `header.payload.signature`. Header algoritma bilgisi içerir. Payload claims içerir: `{"sub": "user@example.com", "exp": 1234567890}`. Signature, header + payload'ın secret key ile HMAC-SHA256 imzasıdır. Sunucu JWT'yi verir ve saklamaz. Her istekte signature'ı doğrular — geçerliyse token gerçektir. Bu **stateless auth**'tur: sunucuda session tablosu tutmaya gerek yok.
 
+---
+
+#### FastAPI Dependency Injection — `Depends()`
+
+**EN:** Route handlers can declare dependency functions as parameters:
 ```python
 def get_order(current_user: User = Depends(get_current_user)):
     ...
 ```
+FastAPI automatically runs `get_current_user()` before calling the handler and passes the result as `current_user`. Auth logic is written once and reused across every endpoint. Dependencies can also chain: `get_current_admin` depends on `get_current_user`.
 
-FastAPI, endpoint çağrılmadan önce `get_current_user()`'ı otomatik çalıştırır, sonucu `current_user` parametresine atar. Bu sayede auth kontrolü tek bir yerde yazılır ve her endpoint'te tekrar edilmez. Dependency'ler zincirleme de kullanılabilir — `get_current_admin` → `get_current_user`'a depend eder.
+**TR:** Route handler'lar parametre olarak dependency fonksiyonları tanımlayabilir. FastAPI, handler çağrılmadan önce `get_current_user()`'ı otomatik çalıştırır ve sonucu `current_user` parametresine atar. Auth mantığı bir kez yazılır, her endpoint'te yeniden kullanılır. Dependency'ler zincirleme de kullanılabilir: `get_current_admin`, `get_current_user`'a depend eder.
 
 ---
 
-### Teknik Kararlar
+#### HS256 vs RS256
 
-| Karar | Gerekçe |
+**EN:** HS256: a single secret key both signs and verifies. Simple and fast. If multiple services need to verify tokens, the secret must be shared with all of them — a security risk. RS256: a private key signs, a public key verifies. The public key can be shared freely. Preferred in microservice architectures. HS256 is sufficient for now.
+
+**TR:** HS256: tek bir secret key hem imzalar hem doğrular. Basit ve hızlı. Birden fazla servisin token doğrulaması gerekiyorsa secret herkesle paylaşılmak zorunda — güvenlik riski. RS256: private key imzalar, public key doğrular. Public key serbestçe paylaşılabilir. Microservice mimarisinde tercih edilir. Şimdilik HS256 yeterli.
+
+---
+
+### Technical Decisions / Teknik Kararlar
+
+| Decision / Karar | Rationale / Gerekçe |
 |---|---|
-| `passlib[bcrypt]` | Endüstri standardı şifre saklama; salt otomatik üretilir |
-| `python-jose[cryptography]` | Hafif JWT kütüphanesi; gerekirse RS256'ya geçiş kolay |
-| `sub` = email | Natural unique identifier; `user_id`'yi email'e çevirmek için ekstra DB sorgusu gerekmez |
-| `HTTPBearer` | Basit, web ve mobil client için aynı şekilde çalışır, OAuth2 form semantiği gerekmez |
-| `decode_access_token` `None` döner | `security.py` side-effect-free; HTTP exception dependency katmanında fırlatılır |
-| JWT config `Settings`'te | Secret ve expiry ortama özel; `.env`'de durur, kaynak koduna girmez |
-
----
-
-### Karşılaşılan Sorunlar
-
-- Pydantic v2'de `EmailStr` için `pydantic[email]` ayrıca install edilmeli.
-- Pydantic v2'de ORM nesnelerini serialize etmek için `model_config = ConfigDict(from_attributes=True)` gerekli (v1'deki `orm_mode = True`'nun yerini aldı).
+| `passlib[bcrypt]` | Industry standard password storage / Endüstri standardı şifre saklama |
+| `python-jose[cryptography]` | Lightweight JWT; easy RS256 upgrade later / Hafif JWT; sonradan RS256'ya geçiş kolay |
+| `sub` = email in JWT | Natural unique identifier; no extra DB round-trip / Doğal unique tanımlayıcı, ekstra DB sorgusu gerekmez |
+| `HTTPBearer` | Works identically for web and mobile / Web ve mobil için aynı şekilde çalışır |
+| `decode_access_token` returns `None` | `security.py` stays side-effect-free / `security.py` yan etkisiz kalır |
 
 ---
 
 ## Day 4 · 2026-04-08 — Category & Product APIs
 
+### Summary
+Full CRUD APIs for Category and Product. Field-level validation, admin-protected write endpoints, public read endpoints, and product filtering by category and name search.
+
 ### Özet
-
-Category ve Product için tam CRUD API'leri. Field-level validation'lı şemalar, auth-protected write endpoint'leri, public read endpoint'leri, kategori ve isim bazlı ürün filtreleme.
-
----
-
-### Ne Yaptık
-
-- `app/schemas/category.py` — `CategoryCreate`, `CategoryUpdate`, `CategoryResponse` (slug format validation)
-- `app/schemas/product.py` — `ProductCreate`, `ProductUpdate`, `ProductResponse` (fiyat/stok validation; CategoryResponse embed)
-- `app/api/v1/categories.py` — tam CRUD; duplicate slug/name → 409
-- `app/api/v1/products.py` — tam CRUD; `?category_id` filtresi ve `?search` (ilike); `model_dump(exclude_unset=True)` ile PUT
+Category ve Product için tam CRUD API'leri. Field bazlı validasyon, admin-korumalı write endpoint'leri, public read endpoint'leri ve kategori ile isim bazlı ürün filtreleme.
 
 ---
 
-### 📚 Temel Kavramlar
+### What We Did / Ne Yaptık
 
-**REST API Tasarım Prensipleri**
-
-REST'te resource (kaynak) merkezli düşünülür. Category bir kaynak. Endpoint'ler fiil değil isim içerir:
-
-```
-POST   /categories       → yeni category oluştur
-GET    /categories       → tüm categories listele
-GET    /categories/5     → id=5 olan category'yi getir
-PUT    /categories/5     → id=5 olanı güncelle
-DELETE /categories/5     → id=5 olanı sil
-```
-
-HTTP methodlar anlamı taşır: `POST` = oluştur, `GET` = oku, `PUT` = güncelle, `DELETE` = sil. Status code'lar da anlam taşır: 200 = başarılı, 201 = oluşturuldu, 404 = bulunamadı, 409 = çakışma.
-
-**`model_dump(exclude_unset=True)` — True Partial Update**
-
-PUT isteğinde şunu düşün: client sadece `{"price": 49.99}` gönderiyor. `model_dump()` tüm alanları döner — gönderilenler + default değerleriyle gönderilenler. `name=None, description=None, price=49.99, ...` gibi. Bu mevcut `name` ve `description`'ı `None`'a ezer.
-
-`model_dump(exclude_unset=True)` ise yalnızca client'ın gönderdiği alanları döner: `{"price": 49.99}`. Sadece bu alan güncellenir, geri kalanı DB'den olduğu gibi kalır. Gerçek anlamda partial update budur.
-
-**`ilike` — Case-Insensitive Search**
-
-```python
-Product.name.ilike(f"%{search}%")
-```
-
-`%` wildcard'tır — başında ve sonunda olunca "içinde geçiyor mu?" anlamına gelir. `ilike` case-insensitive `LIKE` demektir. `search=wireless` → `Wireless Headphones`, `WIRELESS EARBUDS` hepsini bulur.
-
-**`_get_or_404` Helper Paterni**
-
-Her route handler'da şunu tekrar yazmak yerine:
-
-```python
-category = db.query(Category).filter(Category.id == id).first()
-if not category:
-    raise HTTPException(status_code=404, detail="Category not found")
-```
-
-Bunu tek bir yere al:
-
-```python
-def _get_or_404(category_id: int, db: Session) -> Category:
-    category = db.query(Category).filter(Category.id == category_id).first()
-    if not category:
-        raise HTTPException(status_code=404, detail="Category not found")
-    return category
-```
-
-Route handler temizlenir, 404 mantığı tek yerde yaşar. Bu her modülde ayrı tanımlanır — categories.py'da kendi `_get_or_404`'ü var, products.py'da kendi versiyonu.
+- `app/schemas/category.py` — `CategoryCreate`, `CategoryUpdate`, `CategoryResponse` (slug format validation / slug format doğrulaması)
+- `app/schemas/product.py` — `ProductCreate`, `ProductUpdate`, `ProductResponse` (price/stock validation; CategoryResponse embedded / fiyat/stok doğrulaması; CategoryResponse gömülü)
+- `app/api/v1/categories.py` — full CRUD; duplicate slug/name → 409 / tam CRUD; tekrar slug/name → 409
+- `app/api/v1/products.py` — full CRUD; `?category_id` filter and `?search` (ilike); `model_dump(exclude_unset=True)` for PUT
 
 ---
 
-### Teknik Kararlar
+### Key Concepts / Temel Kavramlar
 
-| Karar | Gerekçe |
+#### REST API Design Principles / REST API Tasarım Prensipleri
+
+**EN:** REST is resource-centered. The endpoint path is a noun, not a verb. HTTP methods carry the meaning: `POST` = create, `GET` = read, `PUT` = update, `DELETE` = delete. Status codes also carry meaning: 200 = success, 201 = created, 404 = not found, 409 = conflict. Good REST design is predictable — a developer who knows one endpoint can guess the others.
+
+**TR:** REST kaynak merkezlidir. Endpoint yolu fiil değil isimdir. HTTP methodlar anlamı taşır: `POST` = oluştur, `GET` = oku, `PUT` = güncelle, `DELETE` = sil. Status code'lar da anlam taşır: 200 = başarılı, 201 = oluşturuldu, 404 = bulunamadı, 409 = çakışma. İyi REST tasarımı öngörülebilirdir — bir endpoint'i bilen geliştirici diğerlerini tahmin edebilir.
+
+---
+
+#### `model_dump(exclude_unset=True)` — True Partial Update / Gerçek Kısmi Güncelleme
+
+**EN:** For a PUT request, the client sends only `{"price": 49.99}`. `model_dump()` returns all fields including defaults: `{"name": None, "description": None, "price": 49.99, ...}`. Iterating this and calling `setattr` would overwrite `name` and `description` with `None`. `model_dump(exclude_unset=True)` returns only fields the client actually sent: `{"price": 49.99}`. Only that field is updated — everything else stays as it is in the DB.
+
+**TR:** PUT isteğinde client yalnızca `{"price": 49.99}` gönderiyor. `model_dump()` default değerleriyle tüm alanları döner: `{"name": None, "description": None, "price": 49.99, ...}`. Bunun üzerinde dönerek `setattr` çağırmak, `name` ve `description`'ı `None`'a ezer. `model_dump(exclude_unset=True)` ise yalnızca client'ın gönderdiği alanları döner: `{"price": 49.99}`. Yalnızca o alan güncellenir, geri kalanı DB'de olduğu gibi kalır.
+
+---
+
+#### `ilike` — Case-Insensitive Search / Büyük/Küçük Harf Duyarsız Arama
+
+**EN:** `Product.name.ilike(f"%{search}%")` — `%` is a wildcard that matches any characters before and after the search term. `ilike` is case-insensitive `LIKE`. Searching for `wireless` finds `Wireless Headphones`, `WIRELESS EARBUDS`, and `premium wireless speaker` all at once.
+
+**TR:** `Product.name.ilike(f"%{search}%")` — `%` önünde ve arkasında herhangi bir karakter eşleyen wildcard'dır. `ilike` büyük/küçük harf duyarsız `LIKE`'tır. `wireless` araması `Wireless Headphones`, `WIRELESS EARBUDS` ve `premium wireless speaker`'ı hepsini birden bulur.
+
+---
+
+#### `_get_or_404` Helper Pattern
+
+**EN:** Without a helper, every route repeats the same lookup-and-raise pattern. The helper centralizes this in one place:
+```python
+def _get_or_404(id, db):
+    item = db.query(Model).filter(Model.id == id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Not found")
+    return item
+```
+Route handlers stay clean. 404 logic lives in one place per router.
+
+**TR:** Helper olmadan, her route aynı lookup-and-raise desenini tekrar eder. Helper bunu tek bir yerde toplar. Route handler'lar temiz kalır. 404 mantığı her router'da tek bir yerde yaşar.
+
+---
+
+### Technical Decisions / Teknik Kararlar
+
+| Decision / Karar | Rationale / Gerekçe |
 |---|---|
-| Public GET, protected POST/PUT/DELETE | Mağaza browsing auth gerektirmez; mutation'lar kimlik gerektirir |
-| `_get_or_404` helper | Route handler'ları temiz tutar, 404 mantığı tek yerde |
-| `_assert_category_exists` | DB FK hatasından önce açık API mesajıyla 400 döner |
-| `model_dump(exclude_unset=True)` | Yalnızca gönderilen alanlar güncellenir, istem dışı overwrite olmaz |
-| `ilike` ile search | Case-insensitive kısmi eşleşme; MSSQL'de ek konfigürasyon gerekmez |
-| `ProductResponse` içine `CategoryResponse` embed | Client tek request'te tam ürün + kategori alır |
+| Public GET, protected POST/PUT/DELETE | Browsing needs no auth; mutations require identity / Gezinme auth gerektirmez; değiştirme kimlik gerektirir |
+| `_get_or_404` helper | Clean handlers, single place for 404 logic / Temiz handler'lar, tek 404 mantığı yeri |
+| `_assert_category_exists` | Clear 400 before FK error / FK hatasından önce açık 400 |
+| `model_dump(exclude_unset=True)` in PUT | True partial update / Gerçek kısmi güncelleme |
+| `ProductResponse` embeds `CategoryResponse` | Client gets full product + category in one request / Client tek istekte tam ürün + kategori alır |
 
 ---
 
-## Day 5 · 2026-04-08 — Cart System
+## Day 5 · 2026-04-08 — Cart System / Sepet Sistemi
+
+### Summary
+Cart system: `Cart` and `CartItem` models, Alembic migration, full cart API (view, add, update quantity, remove), schemas with validation, and `User.cart` back-reference. README rewritten as a professional product document.
 
 ### Özet
-
-Sepet sistemi: `Cart` ve `CartItem` modelleri, Alembic migration, tam sepet API'si (görüntüle, ekle, miktar güncelle, kaldır), şemalar ve `User.cart` back-reference. README profesyonel ürün belgesi olarak yeniden yazıldı.
+Sepet sistemi: `Cart` ve `CartItem` modelleri, Alembic migration, tam sepet API'si (görüntüle, ekle, miktar güncelle, kaldır), doğrulamalı şemalar ve `User.cart` back-reference. README profesyonel ürün belgesi olarak yeniden yazıldı.
 
 ---
 
-### Ne Yaptık
+### What We Did / Ne Yaptık
 
-- `app/models/cart.py` — `Cart` (user başına unique), `CartItem` (cart_id + product_id + quantity); `cascade="all, delete-orphan"`
-- `app/models/user.py` — `cart` relationship (`uselist=False`) eklendi
-- `alembic/versions/20260408_0002_add_cart_tables.py` — `carts` ve `cart_items` oluşturuldu
-- `app/schemas/cart.py` — request/response şemaları
+- `app/models/cart.py` — `Cart` (one per user via `unique=True`), `CartItem`; `cascade="all, delete-orphan"`
+- `app/models/user.py` — added `cart` relationship (`uselist=False`) / `cart` relationship eklendi
+- `alembic/versions/20260408_0002_add_cart_tables.py` — `carts` and `cart_items`
+- `app/schemas/cart.py` — request/response schemas / istek/yanıt şemaları
 - `app/api/v1/cart.py` — `GET /cart`, `POST /cart/add`, `PUT /cart/update`, `DELETE /cart/remove`
 
 ---
 
-### 📚 Temel Kavramlar
+### Key Concepts / Temel Kavramlar
 
-**One-to-One vs One-to-Many İlişkiler**
+#### One-to-One vs One-to-Many Relationships
 
-Her kullanıcının tam olarak bir sepeti olur. Bu one-to-one ilişkidir. SQLAlchemy'de `relationship()` varsayılan olarak liste döner (one-to-many). One-to-one için `uselist=False` gerekir:
-
+**EN:** Each user has exactly one cart. This is a one-to-one relationship. SQLAlchemy's `relationship()` defaults to returning a list (one-to-many). For one-to-one, `uselist=False` is required:
 ```python
 cart: Mapped["Cart | None"] = relationship("Cart", uselist=False)
 ```
+Without `uselist=False`, `user.cart` returns a list. With it, `user.cart` returns a single `Cart` object or `None`.
 
-`uselist=False` olmadan `user.cart` bir liste döner. `uselist=False` ile tek `Cart` nesnesi (veya `None`) döner.
-
-**Cascade Delete**
-
-```python
-items: Mapped[list["CartItem"]] = relationship(cascade="all, delete-orphan")
-```
-
-`cascade="all, delete-orphan"` şu anlama gelir: bir `Cart` silindiğinde, o sepete ait tüm `CartItem`'lar da otomatik silinir. "Orphan" — parent'ı olmayan child. Bunu yazmasan, `Cart` silince `cart_items` tablosunda orphan kayıtlar kalır ve FK constraint hatası alırsın.
-
-**`db.flush()` vs `db.commit()`**
-
-`db.flush()`: değişiklikleri SQL'e çevirir ve DB'ye gönderir ama transaction'ı kapatmaz. DB'de değişiklik gözükür ama henüz kalıcı değildir. Kullanım amacı: `flush` sonrası `order.id` gibi DB tarafından üretilen bir değere ihtiyaç duyuyorsun — FK için.
-
-`db.commit()`: transaction'ı kapatır ve değişikliği kalıcı yapar. Başka session'lar artık bu veriyi görebilir. Hata durumunda `db.rollback()` ile tüm flush'lar geri alınır.
-
-**`db.refresh()` — Session Cache Problemi**
-
-SQLAlchemy session'ı bir önbellek gibi davranır. `cart.items` koleksiyonunu okuduktan sonra bir `CartItem` ekleyip commit etsen, `cart.items`'a tekrar baksan eski veriyi görebilirsin. `db.refresh(cart)` diyince SQLAlchemy o nesnenin tüm verilerini DB'den yeniden çeker. Her cart mutasyonundan sonra `db.refresh(cart)` şart — yoksa response eski veriyi döner.
-
-**`_get_or_create_cart` Helper**
-
-Kullanıcı ilk kez sepete ürün eklerken henüz bir `Cart` kaydı yok. Her cart endpoint'inde "var mı? yoksa oluştur" mantığını tekrar yazmak yerine tek bir helper:
-
-```python
-def _get_or_create_cart(user_id, db):
-    cart = db.query(Cart).filter(Cart.user_id == user_id).first()
-    if not cart:
-        cart = Cart(user_id=user_id)
-        db.add(cart)
-        db.flush()
-    return cart
-```
+**TR:** Her kullanıcının tam olarak bir sepeti olur. Bu one-to-one ilişkidir. SQLAlchemy'nin `relationship()`'i varsayılan olarak liste döner (one-to-many). One-to-one için `uselist=False` gerekir. `uselist=False` olmadan `user.cart` bir liste döner. Onunla, `user.cart` tek bir `Cart` nesnesi ya da `None` döner.
 
 ---
 
-### Teknik Kararlar
+#### Cascade Delete / Kademeli Silme
 
-| Karar | Gerekçe |
+**EN:** `cascade="all, delete-orphan"` means: when a `Cart` is deleted, all its `CartItem`s are automatically deleted too. "Orphan" refers to a child record whose parent no longer exists. Without this, deleting a `Cart` would leave orphaned rows in `cart_items` and trigger a FK constraint error.
+
+**TR:** `cascade="all, delete-orphan"` şu anlama gelir: bir `Cart` silindiğinde, ona ait tüm `CartItem`'lar da otomatik silinir. "Orphan" — parent'ı artık olmayan child kaydı demektir. Bu olmadan `Cart` silinince `cart_items`'da orphan satırlar kalır ve FK constraint hatası tetiklenir.
+
+---
+
+#### `db.flush()` vs `db.commit()`
+
+**EN:** `db.flush()`: translates pending changes to SQL and sends them to the DB, but does not close the transaction. The change is visible within the current session. Use it when you need a DB-generated value (like `id`) for a FK before committing. `db.commit()`: closes the transaction and makes changes permanent. Other sessions can now see them. On error, `db.rollback()` undoes all flushes since the last commit.
+
+**TR:** `db.flush()`: bekleyen değişiklikleri SQL'e çevirir ve DB'ye gönderir, ama transaction'ı kapatmaz. Değişiklik mevcut session içinde görünür. Commit'ten önce bir FK için DB tarafından üretilen bir değere (örn. `id`) ihtiyaç duyulduğunda kullanılır. `db.commit()`: transaction'ı kapatır ve değişikliği kalıcı yapar. Diğer session'lar artık görebilir. Hata durumunda `db.rollback()`, son commit'ten bu yana tüm flush'ları geri alır.
+
+---
+
+#### `db.refresh()` — Session Cache Problem / Oturum Önbellek Sorunu
+
+**EN:** SQLAlchemy's session acts like a cache. After reading `cart.items`, if you add a `CartItem` and commit, looking at `cart.items` again might still show the old data. `db.refresh(cart)` forces SQLAlchemy to reload all data for that object from the DB. Required after every cart mutation — otherwise the response returns stale cached data.
+
+**TR:** SQLAlchemy session'ı önbellek gibi davranır. `cart.items`'ı okuduktan sonra bir `CartItem` ekleyip commit etsen, `cart.items`'a tekrar baktığında eski veriyi görebilirsin. `db.refresh(cart)`, SQLAlchemy'yi o nesnenin tüm verilerini DB'den yeniden yüklemeye zorlar. Her cart mutasyonundan sonra zorunludur — yoksa response eski önbelleklenmiş veriyi döner.
+
+---
+
+### Technical Decisions / Teknik Kararlar
+
+| Decision / Karar | Rationale / Gerekçe |
 |---|---|
-| `unique=True` on `Cart.user_id` | DB ve ORM seviyesinde bir kullanıcı = bir sepet kısıtı; convention değil constraint |
-| `_get_or_create_cart` helper | Auto-create mantığı tek yerde |
-| Ekleme mevcut miktarı artırır | Zaten sepette olan ürünü tekrar eklemek sıfırlamak yerine artırır — gerçek UX |
-| `quantity=0` ile kaldırma | Tek endpoint hem "miktar güncelle" hem "kaldır" işlevini görür |
-| Tüm cart endpoint'leri protected | Sepet kişisel veridir, public read güvensizdir |
+| `unique=True` on `Cart.user_id` | One cart per user enforced at DB level / Kullanıcı başına bir sepet DB seviyesinde kısıtlanır |
+| `_get_or_create_cart` helper | Auto-create logic in one place / Otomatik oluşturma mantığı tek yerde |
+| Adding increments quantity | Mirrors real storefront UX / Gerçek mağaza UX'ini yansıtır |
+| `quantity=0` removes item | One endpoint handles change + remove / Tek endpoint değiştirme + kaldırma işini görür |
+| `cascade` on `Cart.items` | Deleting cart cleans up items / Sepet silinince item'lar temizlenir |
 
 ---
 
-### Karşılaşılan Sorunlar
+## Day 6 · 2026-04-10 — Database Online / Veritabanı Çevrimiçi
 
-- `uselist=False` olmadan `user.cart` liste döner, `None` check'i çalışmaz.
-- `db.refresh(cart)` olmadan response eski cache verisini döndürür.
-
----
-
-## Day 6 · 2026-04-10 — Database Online
+### Summary
+The backend was connected to a real Microsoft SQL Server instance. The `NovaStoreDB` database was created, both Alembic migrations were applied, all 5 tables were verified, and utility scripts were added to make this process repeatable. Windows compatibility was addressed throughout.
 
 ### Özet
-
-Backend gerçek bir Microsoft SQL Server instance'ına bağlandı. `nova_store` veritabanı oluşturuldu, iki migration uygulandı, 5 tablo doğrulandı. Tekrarlanabilir utility script'ler eklendi. Windows uyumluluğu için komutlar `py` launcher'a güncellendi.
-
----
-
-### Ne Yaptık
-
-- `scripts/create_db.py` — `master`'a bağlanır, `nova_store` yoksa oluşturur; idempotent
-- `scripts/create_db.sql` — SSMS veya sqlcmd için eşdeğer T-SQL
-- `scripts/verify_tables.py` — SQLAlchemy Inspector ile 5 tablonun varlığını doğrular
-- `alembic upgrade head` — `a1b2c3d4e5f6 → b2c3d4e5f6a7` migration zinciri çalıştı
-- `README.md` — Database Setup bölümü, Windows komutları güncellendi
+Backend gerçek bir Microsoft SQL Server instance'ına bağlandı. `NovaStoreDB` veritabanı oluşturuldu, her iki Alembic migration'ı uygulandı, 5 tablonun tamamı doğrulandı ve bu süreci tekrarlanabilir kılmak için utility script'ler eklendi. Windows uyumluluğu ele alındı.
 
 ---
 
-### Doğrulanan Tablolar
+### What We Did / Ne Yaptık
 
-| Tablo | Migration |
+- `scripts/create_db.py` — connects to `master`, creates `NovaStoreDB` if missing; idempotent / `master`'a bağlanır, yoksa `NovaStoreDB` oluşturur; idempotent
+- `scripts/create_db.sql` — equivalent T-SQL for SSMS or sqlcmd / SSMS veya sqlcmd için eşdeğer T-SQL
+- `scripts/verify_tables.py` — inspects live DB with SQLAlchemy Inspector, confirms all 5 tables / SQLAlchemy Inspector ile canlı DB'yi inceler, 5 tabloyu doğrular
+- `alembic upgrade head` applied — migration chain `a1b2c3d4e5f6 → b2c3d4e5f6a7` / migration zinciri uygulandı
+- `config.py` — switched to `odbc_connect` URL format; removed `DB_PORT`; added `DB_TRUSTED_CONNECTION` / `odbc_connect` URL formatına geçildi
+
+---
+
+### Key Concepts / Temel Kavramlar
+
+#### `autocommit=True` — Why `CREATE DATABASE` Fails in a Transaction
+
+**EN:** In SQL Server, `CREATE DATABASE` is a DDL (Data Definition Language) statement that cannot run inside an open transaction. pyodbc opens a transaction by default on every connection. Running `CREATE DATABASE` inside that transaction raises an error. `autocommit=True` makes each statement its own self-contained transaction — the correct behavior for DDL.
+
+**TR:** SQL Server'da `CREATE DATABASE`, açık bir transaction içinde çalıştırılamayan bir DDL (Data Definition Language) komutudur. pyodbc varsayılan olarak her bağlantıda bir transaction açar. Bu transaction içinde `CREATE DATABASE` çalıştırmak hata verir. `autocommit=True` her statement'ı kendi bağımsız transaction'ı yapar — DDL için doğru davranış.
+
+---
+
+#### Windows Authentication vs SQL Authentication
+
+**EN:** SQL Server supports two auth modes. SQL Auth: username + password. The `sa` account uses this mode but is often disabled by default on SQL Server Express. Windows Auth: connects using the current Windows user's identity — no password needed. `Trusted_Connection=yes` in the connection string tells pyodbc to use Windows Auth. For local development on Windows, this is simpler and more secure.
+
+**TR:** SQL Server iki auth modunu destekler. SQL Auth: kullanıcı adı + şifre. `sa` hesabı bu modu kullanır ama SQL Server Express'te varsayılan olarak kapalı olabilir. Windows Auth: mevcut Windows kullanıcısının kimliğiyle bağlanır — şifre gerekmez. Connection string'deki `Trusted_Connection=yes`, pyodbc'ye Windows Auth kullanmasını söyler. Windows'ta lokal geliştirme için daha basit ve güvenlidir.
+
+---
+
+#### Named Instance and `odbc_connect` Format / Named Instance ve `odbc_connect` Formatı
+
+**EN:** SQL Server has two instance types. Default instance: connect with `localhost:1433`. Named instance (e.g. `localhost\SQLEXPRESS`): uses dynamic ports assigned by SQL Server Browser service. The standard `server:port` URL format doesn't work reliably with named instances. The `odbc_connect` URL format passes the full connection string directly to pyodbc, bypassing port resolution entirely.
+
+**TR:** SQL Server iki instance türüne sahip. Varsayılan instance: `localhost:1433` ile bağlanılır. Named instance (örn. `localhost\SQLEXPRESS`): SQL Server Browser servisi tarafından atanan dinamik port kullanır. Standart `server:port` URL formatı named instance'larla güvenilir çalışmaz. `odbc_connect` URL formatı tam connection string'i doğrudan pyodbc'ye iletir, port çözümünü tamamen bypass eder.
+
+---
+
+#### `TrustServerCertificate=yes`
+
+**EN:** Local SQL Server instances typically use self-signed SSL certificates. pyodbc tries to validate this certificate and fails because it wasn't signed by a trusted Certificate Authority. `TrustServerCertificate=yes` tells pyodbc: skip certificate validation, trust this connection. This is only safe for local development — in production, use a real certificate.
+
+**TR:** Lokal SQL Server instance'ları genellikle self-signed SSL sertifika kullanır. pyodbc bu sertifikayı doğrulamaya çalışır ve başarısız olur çünkü güvenilir bir CA tarafından imzalanmamıştır. `TrustServerCertificate=yes` pyodbc'ye "sertifika doğrulamayı atla, bu bağlantıya güven" der. Bu yalnızca lokal geliştirme için güvenlidir — production'da gerçek sertifika kullanılmalı.
+
+---
+
+### Issues & Fixes / Sorunlar ve Çözümler
+
+**EN:** `alembic/env.py` used `config.set_main_option("sqlalchemy.url", ...)`. The `odbc_connect` URL contains `%` characters. Python's `configparser` (used internally by Alembic) treats `%` as an interpolation syntax character and raises a `ValueError`. Fix: stop using `set_main_option` entirely. Create the engine directly from `settings.DATABASE_URL` using `create_engine()`, bypassing configparser.
+
+**TR:** `alembic/env.py`'da `config.set_main_option("sqlalchemy.url", ...)` kullanılıyordu. `odbc_connect` URL'si `%` karakterleri içerir. Python'un `configparser`'ı (Alembic tarafından dahili olarak kullanılır) `%`'i interpolation syntax karakteri olarak görür ve `ValueError` fırlatır. Çözüm: `set_main_option`'ı tamamen kullanmayı bırak. `create_engine()` kullanarak engine'i doğrudan `settings.DATABASE_URL`'den oluştur, configparser'ı bypass et.
+
+---
+
+### Tables Verified / Doğrulanan Tablolar
+
+| Table / Tablo | Migration |
 |---|---|
 | `users` | 0001_initial_tables |
 | `categories` | 0001_initial_tables |
@@ -427,274 +456,222 @@ Backend gerçek bir Microsoft SQL Server instance'ına bağlandı. `nova_store` 
 
 ---
 
-### 📚 Temel Kavramlar
+## Day 7 · 2026-04-11 — Role System & Order Module / Rol Sistemi ve Sipariş Modülü
 
-**`autocommit=True` — Neden `CREATE DATABASE` Normal Transaction'da Çalışmaz?**
-
-SQL Server'da `CREATE DATABASE` bir DDL (Data Definition Language) komutu. DDL komutları SQL Server'da transaction içinde çalıştırılamaz. pyodbc varsayılan olarak her bağlantıda bir transaction açar. Bu transaction içinde `CREATE DATABASE` dersen hata alırsın. `autocommit=True` ile her statement kendisi ayrı bir transaction olarak çalıştırılır — DDL açısından doğru davranış.
-
-**Windows Authentication (Trusted Connection)**
-
-SQL Server iki auth modu destekler:
-
-- **SQL Auth**: kullanıcı adı + şifre. `sa` hesabı bu moddur.
-- **Windows Auth**: mevcut Windows kullanıcısı ile bağlanır. Şifre gerekmez. Kurumsal ortamlarda tercih edilir.
-
-`Trusted_Connection=yes` ile pyodbc'ye "Windows Auth kullan, kullanıcı adı/şifre isteme" deriz. Lokal geliştirmede bu daha güvenli ve kolaydır — şifreyi `.env`'e yazmana gerek yok.
-
-**`TrustServerCertificate=yes`**
-
-Lokal SQL Server instance'ları genellikle self-signed SSL sertifika kullanır. pyodbc bu sertifikayı doğrulamak isteyince başarısız olur çünkü güvenilir bir CA tarafından imzalanmamıştır. `TrustServerCertificate=yes` ile "bu sertifikayı doğrulama, güven" deriz. Production'da bunu yapmamalısın — gerçek sertifika kullanılmalı.
-
-**Named Instance (`localhost\SQLEXPRESS`)**
-
-SQL Server'ın iki çalışma modeli var. Varsayılan instance: `localhost:1433` ile bağlanılır. Named instance: `localhost\SQLEXPRESS` gibi isimlendirilmiş, dinamik port kullanır. `server:port` URL formatı named instance ile güvenilir çalışmaz. `odbc_connect` formatı ile pyodbc'ye tam connection string verilir ve port otomatik bulunur (SQL Server Browser servisi aracılığıyla).
-
-**SQLAlchemy `Inspector`**
-
-`inspect(engine).get_table_names()` direkt SQL yazmadan DB'deki tablo listesini çekmenin dialect-agnostic yolu. MSSQL, PostgreSQL, SQLite'da aynı kod çalışır.
-
----
-
-### Teknik Kararlar
-
-| Karar | Gerekçe |
-|---|---|
-| `create_db.py` `master`'a bağlanır | `nova_store` henüz yokken ona bağlanamazsın; `master` her zaman erişilebilir |
-| `autocommit=True` | `CREATE DATABASE` transaction içinde çalışmaz |
-| `TrustServerCertificate=yes` | Lokal self-signed sertifika hatası önlenir |
-| `odbc_connect` URL formatı | Named instance ile `server:port` formatı güvenilmez; tam connection string pyodbc'ye bırakılır |
-| Script'ler `.env`'den okur | Tek kaynak; script'lerde hardcoded credential yok |
-
----
-
-### Karşılaşılan Sorunlar
-
-- `CREATE DATABASE` transaction içinde çalışmaz; `autocommit=True` gerekti.
-- `localhost\SQLEXPRESS` named instance için `odbc_connect` URL formatına geçildi; `DB_PORT` kaldırıldı.
-- `alembic/env.py`'da `config.set_main_option("sqlalchemy.url", ...)` — URL içindeki `%` karakterleri configparser interpolation syntax'ı ile çakıştı. `create_engine()` ile direkt engine oluşturmaya geçildi.
-
----
-
-## Day 7 · 2026-04-11 — Role System & Order Module
+### Summary
+Two critical missing pieces were completed: role-based access control (admin / customer) and a full order system (create from cart, price snapshot, status lifecycle). Categories and products can now only be modified by admin users.
 
 ### Özet
-
-Backend'in iki kritik eksikliği tamamlandı: **rol tabanlı erişim kontrolü** (admin / customer) ve tam **sipariş sistemi** (cart'tan sipariş oluşturma, fiyat snapshot, durum makinesi). Kategoriler ve ürünler artık yalnızca admin kullanıcılar tarafından değiştirilebiliyor.
-
----
-
-### Ne Yaptık
-
-**Role sistemi:**
-- `User.role` alanı eklendi (`String(20)`, server_default `"customer"`)
-- `dependencies.py`'a `get_current_admin` dependency eklendi — `role != "admin"` ise 403
-- `categories.py` ve `products.py` write endpoint'leri `get_current_admin` ile güncellendi
-
-**Order modülü:**
-- `app/models/order.py` — `Order`, `OrderItem`, `Address` modelleri
-- `app/schemas/order.py` — `OrderCreate`, `OrderStatusUpdate`, `OrderItemResponse`, `OrderResponse`, `AddressCreate`, `AddressResponse`
-- `app/api/v1/orders.py` — 5 endpoint: sipariş oluştur, listele, detay, durum güncelle (admin), tüm siparişler (admin)
-- `alembic/versions/20260411_0003_role_and_order_tables.py` — `users.role` sütunu + `orders`, `order_items`, `addresses` tabloları
+İki kritik eksiklik tamamlandı: rol tabanlı erişim kontrolü (admin / customer) ve tam sipariş sistemi (cart'tan oluşturma, fiyat snapshot'ı, durum yaşam döngüsü). Kategoriler ve ürünler artık yalnızca admin kullanıcılar tarafından değiştirilebilir.
 
 ---
 
-### 📚 Temel Kavramlar
+### What We Did / Ne Yaptık
 
-**Role-Based Access Control (RBAC)**
+- `app/models/user.py` — `role` field added (`String(20)`, `server_default="customer"`) / `role` alanı eklendi
+- `app/api/v1/dependencies.py` — `get_current_admin` dependency added / `get_current_admin` dependency eklendi
+- `app/api/v1/categories.py` + `products.py` — write endpoints → `get_current_admin` / write endpoint'leri güncellendi
+- `app/models/order.py` — `Order`, `OrderItem`, `Address` models / modeller
+- `app/schemas/order.py` — full order schema set / tam sipariş şema seti
+- `app/api/v1/orders.py` — 5 endpoints / 5 endpoint
+- `alembic/versions/20260411_0003_role_and_order_tables.py` — `users.role` column + `orders`, `order_items`, `addresses`
 
-RBAC: "kim olduğuna göre ne yapabilirsin" sorusunun cevabı. İki temel konsept: Authentication (kimsin?) ve Authorization (ne yapabilirsin?).
+---
 
-Bu projede iki rol:
-- `customer`: kendi sepeti, kendi siparişleri, public read
-- `admin`: her şey + catalog yönetimi + sipariş durum güncellemesi
+### Key Concepts / Temel Kavramlar
 
-Uygulama yöntemi olarak `User.role` sütununu seçtik. Basit, yeterli. Daha karmaşık sistemlerde ayrı `roles` ve `permissions` tabloları olur (RBAC tam implementasyonu). Şimdilik overkill.
+#### Role-Based Access Control (RBAC)
 
-**Dependency Zinciri**
+**EN:** RBAC answers the question: "based on who you are, what can you do?" There are two core concepts: Authentication (who are you?) and Authorization (what can you do?). In this project, `User.role` holds a simple string: `"customer"` or `"admin"`. A FastAPI dependency checks this role and raises 403 if the user doesn't have the required role. More complex systems use separate `roles` and `permissions` tables — overkill for now.
 
-```python
-def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required.")
-    return current_user
+**TR:** RBAC şu soruyu yanıtlar: "kim olduğuna göre ne yapabilirsin?" İki temel kavram: Authentication (kimsin?) ve Authorization (ne yapabilirsin?). Bu projede `User.role`, basit bir string tutar: `"customer"` veya `"admin"`. Bir FastAPI dependency bu rolü kontrol eder ve kullanıcı gerekli role sahip değilse 403 fırlatır. Daha karmaşık sistemler ayrı `roles` ve `permissions` tabloları kullanır — şimdilik overkill.
+
+---
+
+#### Dependency Chain / Dependency Zinciri
+
+**EN:** `get_current_admin` depends on `get_current_user`. FastAPI resolves the chain automatically:
 ```
-
-`get_current_admin`, `get_current_user`'a depend eder. FastAPI çağrı zincirini otomatik çözer:
-
+Request arrives
+  → get_current_user runs (validate token, find user)
+  → get_current_admin runs (check role)
+  → route handler runs
 ```
-Request gelir
-  → get_current_user çalışır (token doğrula, user bul)
-  → get_current_admin çalışır (role kontrol et)
-  → route handler çalışır
-```
+Each layer has a single responsibility. Invalid token → 401. Inactive user → 403. Wrong role → 403. Debugging is straightforward.
 
-Her katman tek bir sorumluluğa sahip. Token geçersizse 401, user inactive ise 403, rol yanlışsa 403. Hata ayıklama kolaylaşır.
+**TR:** `get_current_admin`, `get_current_user`'a depend eder. FastAPI zinciri otomatik çözer. Her katmanın tek sorumluluğu vardır. Geçersiz token → 401. Inactive kullanıcı → 403. Yanlış rol → 403. Hata ayıklama kolaydır.
 
-**Admin Yapma — Neden Public Endpoint Yok?**
+---
 
-"Admin olmak için endpoint olmamalı" — bu bilinçli bir güvenlik kararı. Şu an admin yapmak için doğrudan DB'de `UPDATE users SET role='admin' WHERE email='...'` çalıştırmak gerekiyor. Bu kasıtlı bir kısıtlama: internet üzerinden çağrılabilir bir "beni admin yap" endpoint'i olmamalı. Gerçek projelerde bu işlem genellikle güvenli admin CLI veya migration seed script ile yapılır.
+#### Price Snapshot Pattern / Fiyat Snapshot Paterni
 
-**Fiyat Snapshot Paterni**
+**EN:** A critical e-commerce rule: store the price at the time of purchase, not a reference to the product's current price. `OrderItem.unit_price` captures the price at order time. If the product's price changes later, existing orders are unaffected. `OrderItem.product_name` is also a snapshot — if the product is renamed, historical orders still show the original name.
 
-```python
-unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-```
+**TR:** Kritik bir e-ticaret kuralı: satın alma anındaki fiyatı sakla, ürünün mevcut fiyatına referans verme. `OrderItem.unit_price`, sipariş anındaki fiyatı yakalar. Ürün fiyatı sonradan değişirse mevcut siparişler etkilenmez. `OrderItem.product_name` de bir snapshot'tır — ürün yeniden adlandırılırsa eski siparişler orijinal adı göstermeye devam eder.
 
-E-ticarette kritik bir kural: sipariş verildiği andaki fiyat saklanmalı, ürünün mevcut fiyatına referans verilmemeli. Neden? Ürün fiyatı sonradan değişebilir. Müşteri 149.99'a satın aldı, fiyat sonradan 199.99 oldu. Müşterinin siparişi hâlâ 149.99 göstermeli. `OrderItem.unit_price` sipariş anındaki fiyatın snapshot'ıdır. `OrderItem.product_name` de aynı nedenle snapshot'tır — ürün adı değişse bile sipariş tarihi görünümü değişmemeli.
+---
 
-**Sipariş Oluşturma Transaction Mantığı**
+#### Order Creation Transaction / Sipariş Oluşturma Transaction Mantığı
 
-`POST /orders` bir transaction içinde şunları yapar:
-
-1. Cart boş mu? → 400
-2. Tüm ürünler için stok yeterli mi? → 400
-3. `Order` oluştur, `db.flush()` (id al)
-4. Her cart item için `OrderItem` oluştur (price snapshot + isim snapshot)
-5. Her ürünün `stock`'unu azalt
-6. `Address` oluştur
-7. Cart item'larını sil (sepeti boşalt)
+**EN:** `POST /orders` performs these steps inside a single transaction:
+1. Validate cart is not empty → 400 if empty
+2. Validate stock for all items → 400 if insufficient
+3. Create `Order`, `db.flush()` to get `order.id`
+4. Create `OrderItem` for each cart item (snapshot name + price)
+5. Decrement `product.stock` for each item
+6. Create `Address`
+7. Delete all cart items (clear the cart)
 8. `db.commit()`
 
-Eğer adım 4'te bir ürünün stoku sıfırın altına inecekse adım 2'de yakalanır. Adım 8'deki `commit` tüm bunları atomik yapar: ya hepsi gerçekleşir ya hiçbiri. `commit` öncesi hata olursa `rollback` ile her şey geri alınır — DB yarım kalmaz.
+If any step fails, `rollback()` undoes everything. Either the entire order is created cleanly, or nothing changes.
 
-**Sipariş Durum Makinesi (Status Machine)**
-
-Sipariş durumu keyfi değiştirilmemeli; belirli bir akış var:
-
-```
-pending → paid → shipped → cancelled (herhangi aşamadan)
-```
-
-Şu an validasyonu basit tutuyoruz — geçerli değerler Pydantic `pattern` ile kontrol ediliyor:
-
-```python
-status: str = Field(..., pattern="^(pending|paid|shipped|cancelled)$")
-```
-
-Gelişmiş implementasyonda "shipped'dan pending'e dönemezsin" gibi geçiş kuralları da eklenir (state machine pattern).
-
-**`GET /orders/{id}` — Hem User Hem Admin Erişimi**
-
-```python
-if order.user_id != current_user.id and current_user.role != "admin":
-    raise HTTPException(status_code=403, detail="Access denied.")
-```
-
-Bu endpoint hem customer hem admin kullanır. Customer kendi siparişini, admin herkesin siparişini görebilir. `get_current_admin` değil `get_current_user` dependency'si kullanıldı — sonra route içinde ikinci kontrol yapıldı.
+**TR:** `POST /orders` tek bir transaction içinde şu adımları gerçekleştirir: (1) cart'ın boş olmadığını doğrula, (2) tüm itemlar için stok yeterliliğini doğrula, (3) `Order` oluştur, `db.flush()` ile `order.id` al, (4) her cart item için `OrderItem` oluştur (isim + fiyat snapshot), (5) her ürünün stokunu azalt, (6) `Address` oluştur, (7) tüm cart itemlarını sil (sepeti boşalt), (8) `db.commit()`. Herhangi bir adım başarısız olursa `rollback()` her şeyi geri alır. Ya siparişin tamamı temiz oluşturulur, ya hiçbir şey değişmez.
 
 ---
 
-### Teknik Kararlar
+#### Order Status Machine / Sipariş Durum Makinesi
 
-| Karar | Gerekçe |
+**EN:** Order status shouldn't change arbitrarily. The intended flow is `pending → paid → shipped → cancelled` (from any stage). Currently validation is simple — Pydantic's `pattern` field ensures only valid status strings are accepted. In an advanced implementation, transition rules would also be enforced: e.g., you cannot go from `shipped` back to `pending`.
+
+**TR:** Sipariş durumu keyfi değiştirilmemeli; belirli bir akış var: `pending → paid → shipped → cancelled` (herhangi aşamadan). Şu an validasyon basit — Pydantic'in `pattern` alanı yalnızca geçerli durum string'lerinin kabul edilmesini sağlar. Gelişmiş bir implementasyonda geçiş kuralları da uygulanır: örn. `shipped`'dan `pending`'e dönemezsin.
+
+---
+
+### Technical Decisions / Teknik Kararlar
+
+| Decision / Karar | Rationale / Gerekçe |
 |---|---|
-| `role` sütunu `User`'da | Basit iki-rol sistemi için ayrı `roles` tablosu overkill |
-| `server_default="customer"` | DB seviyesinde default — ORM bypass edilen insertlarda da geçerli |
-| Admin yetkisi sadece DB'den değiştirilebilir | Public "promote to admin" endpoint güvenlik riski; kasıtlı kısıtlama |
-| `OrderItem.unit_price` snapshot | Sonraki fiyat değişiklikleri tarihi siparişleri etkilemez |
-| `OrderItem.product_name` snapshot | Sonraki ürün adı değişiklikleri tarihi siparişleri etkilemez |
-| `db.flush()` order'dan sonra | `order.id` FK'lar için lazım; commit olmadan ID'yi kullanmak gerekiyor |
-| Cascade delete `Order.items` ve `Order.address` | Sipariş silinince items ve address de temizlenir, orphan kalınmaz |
-| `GET /admin/all` admin endpoint'i | Admin tüm siparişleri görebilmeli; müşteri listesi yalnızca kendi siparişlerini döner |
+| `role` column on `User` | Simple two-role system; separate roles table is overkill / Basit iki rol sistemi; ayrı tablo overkill |
+| `server_default="customer"` | DB-level default; valid even for ORM-bypassed inserts / DB seviyesi default; ORM bypass insert'lerinde de geçerli |
+| No public "promote to admin" endpoint | Security — intentional restriction / Güvenlik — bilinçli kısıtlama |
+| `OrderItem.unit_price` snapshot | Future price changes don't affect past orders / Gelecekteki fiyat değişiklikleri eski siparişleri etkilemez |
+| `OrderItem.product_name` snapshot | Future renames don't affect historical orders / Yeniden adlandırma eski siparişleri etkilemez |
+| `db.flush()` after Order creation | Need `order.id` for FK before committing / Commit'ten önce FK için `order.id` lazım |
 
 ---
 
-### Karşılaşılan Sorunlar
+## Day 8 · 2026-04-12 — Backend Completion / Backend Tamamlama
 
-- `categories.py` ve `products.py`'da `get_current_user` import'ları `get_current_admin` ile değiştirilmesi gerekti — eski import varsa `NameError`.
-- `orders.py`'da `from __future__ import annotations` kullanmak `Mapped[list[...]]` type hint'lerinin runtime'da sorun çıkarmamasını sağlar.
+### Summary
+Accumulated backend debt was cleared: CORS middleware, pagination, product images model, seed data script, and Docker configuration. The backend is now fully production-ready before moving to the frontend.
 
----
-
-### Migration: 0003
-
-```
-users          → role kolonu eklendi (String(20), server_default="customer")
-orders         → yeni tablo
-order_items    → yeni tablo
-addresses      → yeni tablo
-```
+### Özet
+Biriken backend borcu kapatıldı: CORS middleware, pagination, product images modeli, seed data script ve Docker konfigürasyonu. Frontend'e geçmeden önce backend tam anlamıyla production-ready hale getirildi.
 
 ---
 
-## Revize Proje Planı
+### What We Did / Ne Yaptık
 
-Bkz: bu dosyanın sonundaki **Project Plan — Revised 2026-04-10** bölümü.
+- `app/core/config.py` — `CORS_ORIGINS: list[str]` field added / eklendi
+- `app/main.py` — `CORSMiddleware` added / eklendi
+- `app/api/v1/products.py` — `skip` and `limit` query params / query parametreleri
+- `app/api/v1/categories.py` — `skip` and `limit` query params / query parametreleri
+- `app/models/product_image.py` — `ProductImage` model: `product_id`, `url`, `alt_text`, `is_primary`
+- `app/models/product.py` — `images` relationship added (`cascade="all, delete-orphan"`) / eklendi
+- `app/schemas/product_image.py` — `ProductImageCreate`, `ProductImageResponse`
+- `app/schemas/product.py` — `images` field added to `ProductResponse` / eklendi
+- `alembic/versions/20260412_0004_add_product_images.py` — `product_images` table
+- `scripts/seed.py` — 1 admin user, 5 categories, 11 products with images; idempotent
+- `backend/Dockerfile` — Python 3.12-slim, ODBC Driver 17, uvicorn
+- `docker-compose.yml` — `db` (MSSQL 2022) + `api` services, healthcheck, named volume
 
 ---
 
-## Project Plan — Revised 2026-04-10
+### Key Concepts / Temel Kavramlar
 
-### Context
+#### CORS (Cross-Origin Resource Sharing)
 
-7. Gün sonu (11 Nisan) itibarıyla backend çekirdeği tamamlandı:
+**EN:** Browsers block fetch/XHR requests from one origin (e.g. `http://localhost:5173`) to a different origin (e.g. `http://localhost:8000`) by default. This is the Same-Origin Policy. CORS is the mechanism by which a server declares which origins it will accept requests from. The browser first sends an `OPTIONS` preflight request; if the server responds with an appropriate `Access-Control-Allow-Origin` header, the browser proceeds with the actual request. Without this, every React/Flutter request to the backend fails.
 
-| Modül | Durum |
+**TR:** Tarayıcılar varsayılan olarak bir origin'den (`http://localhost:5173`) farklı bir origin'e (`http://localhost:8000`) yapılan fetch/XHR isteklerini engeller. Buna Same-Origin Policy denir. CORS, sunucunun hangi origin'lerden gelen istekleri kabul edeceğini bildirdiği mekanizmadır. Tarayıcı önce bir `OPTIONS` preflight isteği gönderir; sunucu uygun `Access-Control-Allow-Origin` header'ıyla yanıt verirse tarayıcı gerçek isteği gönderir. Bu olmadan her React/Flutter isteği backend'e ulaşamaz.
+
+---
+
+#### Pagination — Offset vs Cursor / Sayfalama — Offset vs Cursor
+
+**EN:** There are two main pagination approaches. *Offset pagination* (`skip`/`limit`): `SELECT ... OFFSET 20 ROWS FETCH NEXT 20 ROWS ONLY`. Simple and intuitive. Downside: on large offsets it slows down, and if records are added/deleted between page loads, items can shift across pages. *Cursor pagination*: references the last seen record's ID. Consistent even with real-time insertions — preferred for social media feeds. For an e-commerce product list, offset pagination is sufficient and easy to understand.
+
+**TR:** İki temel sayfalama yöntemi var. *Offset pagination* (`skip`/`limit`): `SELECT ... OFFSET 20 ROWS FETCH NEXT 20 ROWS ONLY`. Basit ve anlaşılır. Dezavantajı: büyük offset'lerde yavaşlar; sayfa yüklemeleri arasında kayıt eklenip silinirse item'lar sayfalar arasında kayabilir. *Cursor pagination*: son görülen kaydın ID'sini referans alır. Gerçek zamanlı ekleme işlemlerinde bile tutarlıdır — sosyal medya akışlarında tercih edilir. E-ticaret ürün listesi için offset pagination yeterli ve anlaşılırdır.
+
+---
+
+#### Why a `limit` Upper Bound Matters / Neden `limit` Üst Sınırı Önemli?
+
+**EN:** Without an upper bound on `limit`, a client can send `?limit=999999` and pull the entire table in one request. This creates a massive load on the DB and network. Setting `le=100` in the Query parameter definition means the server will reject any limit above 100 with a 422 validation error — no extra code needed.
+
+**TR:** `limit` üzerinde üst sınır olmadan bir client `?limit=999999` gönderip tüm tabloyu tek bir istekte çekebilir. Bu DB ve network üzerinde ciddi yük yaratır. Query parametre tanımında `le=100` ayarlamak, sunucunun 100'ün üzerindeki herhangi bir limit'i 422 validation hatası ile reddedeceği anlamına gelir — ekstra kod gerekmez.
+
+---
+
+#### Product Images — URL-Based vs File Upload / URL Tabanlı vs Dosya Yükleme
+
+**EN:** A real file upload endpoint (multipart/form-data, file storage) requires significant infrastructure: cloud storage (S3), CDN, thumbnail generation, file type validation. For a portfolio project, this is overkill. URL-based approach: the admin enters a URL when creating a product; we store only the URL. Simple, functional, and demonstrable in the admin panel. Later, if real uploads are needed, the `url` field can be repurposed as a storage path.
+
+**TR:** Gerçek bir dosya yükleme endpoint'i (multipart/form-data, dosya depolama) ciddi altyapı gerektirir: cloud storage (S3), CDN, thumbnail oluşturma, dosya tipi doğrulama. Bir portfolio projesi için bu aşırıya kaçmaktır. URL tabanlı yaklaşım: admin ürün eklerken bir URL girer; biz yalnızca URL'yi saklarız. Basit, işlevsel ve admin panelde gösterilebilir. Sonradan gerçek upload gerekirse `url` alanı depolama yolu olarak yeniden kullanılabilir.
+
+---
+
+#### Idempotent Seed Script / Idempotent Seed Script
+
+**EN:** Running `py scripts/seed.py` twice should not create duplicate records. Before every insert, we check if the record already exists (by email for users, by slug for categories, by name for products). If it does, we skip it. This "idempotent" behavior means: no matter how many times you run it, the result is the same. Essential for developer workflows where the seed is run repeatedly during setup.
+
+**TR:** `py scripts/seed.py`'ı iki kez çalıştırmak duplicate kayıt oluşturmamalı. Her insert'ten önce kaydın zaten var olup olmadığını kontrol ediyoruz (kullanıcılar için email, kategoriler için slug, ürünler için isim ile). Varsa atlıyoruz. Bu "idempotent" davranış şu anlama gelir: kaç kez çalıştırırsan çalıştır, sonuç aynı. Kurulum sırasında seed'in defalarca çalıştırıldığı geliştirici iş akışları için gereklidir.
+
+---
+
+#### Docker Healthcheck
+
+**EN:** When the MSSQL container starts, the SQL Server engine takes several seconds to fully initialize. If the `api` service starts immediately without waiting, it tries to connect to the DB before it's ready and fails. The `healthcheck` runs `sqlcmd -Q "SELECT 1"` every 10 seconds. `depends_on: condition: service_healthy` ensures the `api` service only starts once the DB is confirmed ready.
+
+**TR:** MSSQL container'ı başladığında SQL Server engine'in tamamen başlatılması birkaç saniye alır. `api` servisi beklemeden hemen başlarsa, hazır olmadan önce DB'ye bağlanmaya çalışır ve başarısız olur. `healthcheck`, her 10 saniyede bir `sqlcmd -Q "SELECT 1"` çalıştırır. `depends_on: condition: service_healthy`, `api` servisinin yalnızca DB'nin hazır olduğu doğrulandıktan sonra başlamasını sağlar.
+
+---
+
+### Technical Decisions / Teknik Kararlar
+
+| Decision / Karar | Rationale / Gerekçe |
 |---|---|
-| Backend foundation (FastAPI, config, DB, Alembic) | ✅ |
-| Modeller: User, Category, Product, Cart, CartItem | ✅ |
-| Auth: register, login, JWT, /me | ✅ |
-| Role sistemi (admin/customer) | ✅ |
-| Category CRUD (admin-protected) | ✅ |
-| Product CRUD (search, filter, admin-protected) | ✅ |
-| Cart sistemi | ✅ |
-| Order sistemi (create, list, detail, status) | ✅ |
-| CORS middleware | ❌ |
-| Pagination | ❌ |
-| Product images | ❌ |
-| Seed data | ❌ |
-| Docker | ❌ |
+| `CORS_ORIGINS` in settings | Origin list is environment-specific; production uses real domains / Origin listesi ortama özel; production gerçek domainler kullanır |
+| `limit` max 100 (products) | Prevents unbounded queries / Sınırsız sorguları önler |
+| `limit` default 100 (categories) | Category count is small; usually fine to return all / Kategori sayısı azdır, genellikle hepsini döndürmek sorun değil |
+| Product images URL-based | Avoids upload infrastructure complexity / Upload altyapısı karmaşıklığından kaçınır |
+| `cascade` on `Product.images` | Deleting a product cleans up its images / Ürün silinince görselleri temizlenir |
+| Seed script idempotent | Can be run repeatedly during development / Geliştirme sırasında tekrar tekrar çalıştırılabilir |
+| Docker Compose healthcheck | API only starts after DB is truly ready / API yalnızca DB gerçekten hazır olduktan sonra başlar |
+
+---
+
+## Revised Project Plan / Revize Proje Planı
+
+### Status as of Day 8 / Gün 8 Sonu İtibarıyla Durum
+
+| Module / Modül | Status / Durum |
+|---|---|
+| Backend foundation | ✅ |
+| Models: User, Category, Product, Cart, CartItem, Order, OrderItem, Address, ProductImage | ✅ |
+| Auth (register, login, JWT) | ✅ |
+| Role system (admin/customer) | ✅ |
+| Category & Product CRUD (admin-protected) | ✅ |
+| Cart system | ✅ |
+| Order system | ✅ |
+| CORS middleware | ✅ |
+| Pagination | ✅ |
+| Product images | ✅ |
+| Seed data script | ✅ |
+| Docker | ✅ |
 | React frontend | ❌ |
 | Flutter mobile | ❌ |
-| AI entegrasyonu | ❌ |
+| AI integration | ❌ |
 
----
+### Remaining Schedule / Kalan Plan
 
-### Kalan Plan
-
-#### Gün 8 · 12 Nisan — Backend Tamamlama
-
-- CORS middleware (`CORSMiddleware`, `localhost:3000` ve `localhost:5173`)
-- Pagination (`skip`, `limit` parametreleri products ve categories'e)
-- Product images modeli (URL tabanlı), migration
-- Seed data (`scripts/seed.py`)
-- Docker (`Dockerfile` + `docker-compose.yml`)
-
-#### Gün 9 · 13 Nisan — React Kurulumu + Admin Panel Foundation
-
-- Vite + React + TypeScript kurulumu
-- `axios` instance, `react-router-dom`, Auth context
-- Admin login, protected route, dashboard layout
-
-#### Gün 10 · 14 Nisan — Admin Panel Core
-
-- Ürün ve kategori CRUD formları
-- Sipariş listesi + detay + durum güncelleme
-- Dashboard istatistik kartları
-
-#### Gün 11 · 15 Nisan — Customer Web Part 1
-
-- Homepage, shop sayfası, ürün detay
-- Category filtresi, search bar
-
-#### Gün 12 · 16 Nisan — Customer Web Part 2
-
-- Login/register, cart sayfası, checkout, siparişlerim
-
-#### Gün 13 · 17 Nisan — Flutter Mobile
-
-- Login/register, ürün listesi, detay, sepet, checkout
-
-#### Gün 14 · 18 Nisan — AI Entegrasyonu
-
-- `POST /api/v1/ai/generate-description` (admin-only)
-- Admin panelde "AI ile Açıklama Üret" butonu
-
-#### Gün 15 · 19 Nisan — Polish + Docker
-
-- Loading states, empty states, error messages, responsive fixes
-
-#### Gün 16 · 20 Nisan — Final Paketleme
-
-- README, architecture diagram, screenshots, sunum notları
+| Day / Gün | Date / Tarih | Scope / Kapsam |
+|---|---|---|
+| Day 9 | 13 Nisan | React setup + Admin panel foundation / React kurulumu + Admin panel temeli |
+| Day 10 | 14 Nisan | Admin panel core modules / Admin panel core modüller |
+| Day 11 | 15 Nisan | Customer web part 1 / Müşteri web part 1 |
+| Day 12 | 16 Nisan | Customer web part 2 / Müşteri web part 2 |
+| Day 13 | 17 Nisan | Flutter mobile |
+| Day 14 | 18 Nisan | AI integration / AI entegrasyonu |
+| Day 15 | 19 Nisan | Polish + Docker testing / Cilalama + Docker testi |
+| Day 16 | 20 Nisan | Final packaging / Final paketleme |

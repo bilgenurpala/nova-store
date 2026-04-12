@@ -4,6 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.schemas.category import CategoryResponse
+from app.schemas.product_image import ProductImageResponse
 
 
 class ProductCreate(BaseModel):
@@ -74,5 +75,6 @@ class ProductResponse(BaseModel):
     stock: int
     category_id: int
     category: CategoryResponse
+    images: list[ProductImageResponse] = []
     created_at: datetime
     updated_at: datetime

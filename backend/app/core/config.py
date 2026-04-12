@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
+
     @property
     def DATABASE_URL(self) -> str:
         if self.DB_TRUSTED_CONNECTION:

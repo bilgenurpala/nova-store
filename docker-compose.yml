@@ -1,0 +1,36 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "NovaStore123!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "NovaStore123!" -Q "SELECT 1" -b
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      DB_SERVER: db
+      DB_TRUSTED_CONNECTION: "false"
+      DB_USER: sa
+      DB_PASSWORD: "NovaStore123!"
+      DB_NAME: NovaStoreDB
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mssql_data:

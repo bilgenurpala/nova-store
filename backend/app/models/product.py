@@ -8,6 +8,7 @@ from app.models.base import TimestampedBase
 
 if TYPE_CHECKING:
     from app.models.category import Category
+    from app.models.product_image import ProductImage
 
 
 class Product(TimestampedBase):
@@ -22,3 +23,6 @@ class Product(TimestampedBase):
     )
 
     category: Mapped["Category"] = relationship("Category", back_populates="products")
+    images: Mapped[list["ProductImage"]] = relationship(
+        "ProductImage", back_populates="product", cascade="all, delete-orphan"
+    )

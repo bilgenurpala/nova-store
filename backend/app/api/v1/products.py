@@ -45,6 +45,8 @@ def list_products(
     db: Session = Depends(get_db),
     category_id: int | None = Query(default=None, description="Filter by category"),
     search: str | None = Query(default=None, description="Search by product name"),
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=20, ge=1, le=100, description="Max records to return"),
 ):
     query = db.query(Product)
 
@@ -54,7 +56,7 @@ def list_products(
     if search:
         query = query.filter(Product.name.ilike(f"%{search}%"))
 
-    return query.order_by(Product.name).all()
+    return query.order_by(Product.name).offset(skip).limit(limit).all()
 
 
 @router.get("/{product_id}", response_model=ProductResponse)
