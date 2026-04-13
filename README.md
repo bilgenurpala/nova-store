@@ -12,7 +12,7 @@ A full-stack e-commerce platform — a shared REST backend serving both a React 
 | Database   | Microsoft SQL Server (MSSQL)      |
 | ORM        | SQLAlchemy 2.x                    |
 | Migrations | Alembic                           |
-| Web        | React.js *(planned)*              |
+| Web        | React.js · Vite · Tailwind CSS v4 |
 | Mobile     | Flutter · Dart *(planned)*        |
 | AI         | TBD                               |
 
@@ -37,6 +37,31 @@ nova-store/
 ├── README.md
 ├── docs/
 │   └── devlog.md
+├── frontend/
+│   ├── .env
+│   ├── vite.config.ts
+│   ├── package.json
+│   └── src/
+│       ├── main.tsx
+│       ├── App.tsx               ← BrowserRouter + Routes
+│       ├── index.css             ← @import "tailwindcss"
+│       ├── api/
+│       │   ├── client.ts         ← axios instance + interceptors
+│       │   └── auth.ts
+│       ├── context/
+│       │   └── AuthContext.tsx   ← AuthProvider, useAuth hook
+│       ├── types/
+│       │   └── index.ts          ← TypeScript interfaces
+│       ├── components/
+│       │   ├── ProtectedRoute.tsx
+│       │   └── layout/
+│       │       ├── AdminLayout.tsx
+│       │       └── Sidebar.tsx
+│       └── pages/
+│           ├── auth/
+│           │   └── Login.tsx
+│           └── admin/
+│               └── Dashboard.tsx
 └── backend/
     ├── requirements.txt
     ├── alembic.ini
@@ -331,6 +356,27 @@ py -c "import secrets; print(secrets.token_hex(32))"
 
 ---
 
+## Running the Frontend
+
+```bat
+cd frontend
+npm install
+npm run dev
+```
+
+App → `http://localhost:5173`  
+Admin panel → `http://localhost:5173/admin`
+
+The frontend expects the backend running at `http://localhost:8000`. Configure via `frontend/.env`:
+
+```env
+VITE_API_URL=http://localhost:8000/api/v1
+```
+
+> **Note:** Vite only exposes environment variables prefixed with `VITE_` to the browser bundle.
+
+---
+
 ## Migrations
 
 ```bash
@@ -381,6 +427,8 @@ alembic current
 - [x] Product images (URL-based, primary flag)
 - [x] Seed data script
 - [x] Docker (Dockerfile + docker-compose)
-- [ ] React web frontend
+- [x] React admin panel — auth layer (login, protected routes, layout)
+- [ ] React admin panel — core modules (Products, Categories, Orders)
+- [ ] React customer-facing web
 - [ ] Flutter mobile app
 - [ ] AI features

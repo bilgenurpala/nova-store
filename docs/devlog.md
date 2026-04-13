@@ -641,9 +641,107 @@ Biriken backend borcu kapatıldı: CORS middleware, pagination, product images m
 
 ---
 
+---
+
+## Day 9 · 2026-04-13 — React Frontend Setup / React Frontend Kurulumu
+
+### Summary
+The backend is complete. Today we bootstrapped the React web frontend: Vite + TypeScript + Tailwind CSS v4, folder architecture, TypeScript type layer, axios HTTP client with auth interceptors, React Context–based auth state, admin layout skeleton, login page, and a dashboard shell. By end of day the admin panel loads, authenticates against the live FastAPI backend, and renders the protected dashboard.
+
+### Özet
+Backend tamam. Bugün React web frontend'ini ayağa kaldırdık: Vite + TypeScript + Tailwind CSS v4, klasör mimarisi, TypeScript tip katmanı, auth interceptor'lü axios HTTP istemcisi, React Context tabanlı auth state'i, admin layout iskeletini, login sayfasını ve bir dashboard kabuğunu. Gün sonunda admin paneli açılıyor, canlı FastAPI backend'e karşı kimlik doğruluyor ve korumalı dashboard'u render ediyor.
+
+---
+
+### What We Did / Ne Yaptık
+
+- `frontend/` — scaffolded with `npm create vite@latest` (React + TypeScript template) / `npm create vite@latest` ile oluşturuldu (React + TypeScript şablonu)
+- Tailwind CSS v4 installed with `@tailwindcss/vite` plugin (`init` command removed in v4) / v4'te `init` komutu kaldırıldı; `@tailwindcss/vite` plugin ile kuruldu
+- `vite.config.ts` — registered `tailwindcss()` as Vite plugin / `tailwindcss()` Vite plugin olarak kaydedildi
+- `src/index.css` — `@import "tailwindcss"` (v4 syntax, replaces `@tailwind base/components/utilities`) / v4 sözdizimi, eski üç direktifi değiştirir
+- `src/types/index.ts` — TypeScript interfaces for all entities: `User`, `TokenResponse`, `Category`, `Product`, `ProductImage`, `Cart`, `CartItem`, `Order`, `OrderItem`, `Address`, `PaginationParams`
+- `src/api/client.ts` — axios instance with `VITE_API_URL` base, request interceptor (attach Bearer token), response interceptor (401 → redirect to `/admin/login`)
+- `src/api/auth.ts` — `login()` and `getMe()` functions
+- `src/context/AuthContext.tsx` — `AuthProvider` with `user`, `token`, `isLoading`, `signIn`, `signOut`; persists token in `localStorage`; restores session on page refresh
+- `src/components/ProtectedRoute.tsx` — redirects to `/admin/login` if unauthenticated or if role ≠ `admin`
+- `src/components/layout/Sidebar.tsx` — dark sidebar, NavLink items (Dashboard, Products, Categories, Orders), user email display, Sign Out button
+- `src/components/layout/AdminLayout.tsx` — `<Sidebar />` + topbar + `<Outlet />`
+- `src/pages/auth/Login.tsx` — email/password form with error states (401 → "Invalid email or password", 403 → "Your account is inactive")
+- `src/pages/admin/Dashboard.tsx` — 4-column stat card grid (placeholders) + recent orders placeholder
+- `src/App.tsx` — `BrowserRouter` + `AuthProvider` + `Routes`: `/admin/login` (public), `/admin` (protected, `requireAdmin`) with nested `<Dashboard />`, wildcard `*` redirect to `/admin`
+- `frontend/.env` — `VITE_API_URL=http://localhost:8000/api/v1`
+
+---
+
+### Key Concepts / Temel Kavramlar
+
+#### Vite vs Create React App
+**EN:** Vite is a build tool that uses native ES modules in the browser during development — no bundling step, near-instant cold start, hot module replacement in milliseconds. Create React App (CRA) bundles everything with Webpack on every change. Vite's dev server is 10–100× faster for large projects.
+
+**TR:** Vite, geliştirme sırasında tarayıcıda native ES modüllerini kullanan bir build aracıdır — bundle adımı yoktur, neredeyse anında soğuk başlangıç, milisaniyelerle HMR. Create React App (CRA) her değişiklikte Webpack ile her şeyi bundle eder. Vite'ın dev sunucusu büyük projelerde 10–100× daha hızlıdır.
+
+---
+
+#### Tailwind CSS v4 — What Changed / Ne Değişti
+**EN:** Tailwind v4 dropped the `tailwind.config.js` file and the `tailwind init` CLI command. Instead, you install `@tailwindcss/vite` and import Tailwind with a single CSS line: `@import "tailwindcss"`. This replaces the three directives (`@tailwind base`, `@tailwind components`, `@tailwind utilities`). The utility classes are the same — only the configuration mechanism changed.
+
+**TR:** Tailwind v4, `tailwind.config.js` dosyasını ve `tailwind init` CLI komutunu kaldırdı. Bunun yerine `@tailwindcss/vite` yükleniyor ve Tailwind tek bir CSS satırıyla import ediliyor: `@import "tailwindcss"`. Bu, üç direktifin (`@tailwind base`, `@tailwind components`, `@tailwind utilities`) yerini alıyor. Utility sınıfları aynı — yalnızca konfigürasyon mekanizması değişti.
+
+---
+
+#### Axios Interceptors / Axios Interceptor'ları
+**EN:** An interceptor is a function that runs on every request or response before your code handles it. The request interceptor reads the token from `localStorage` and injects it into every outgoing request's `Authorization` header — so you don't have to pass headers manually in every API call. The response interceptor catches 401 errors globally and redirects to the login page, preventing unauthorized content from rendering.
+
+**TR:** Interceptor, kodunuz işlemeden önce her istek veya yanıtta çalışan bir fonksiyondur. İstek interceptor'ı token'ı `localStorage`'dan okur ve her giden isteğin `Authorization` header'ına enjekte eder — böylece her API çağrısında header'ları manuel geçmek zorunda kalmazsın. Yanıt interceptor'ı 401 hatalarını global olarak yakalar ve login sayfasına yönlendirir; yetkisiz içeriğin render edilmesini önler.
+
+---
+
+#### React Context API
+**EN:** Context is React's built-in state-sharing mechanism. Without it, you'd pass `user` and `signOut` as props down through every component that needs them (`prop drilling`). `AuthProvider` wraps the whole app, stores auth state, and any component can call `useAuth()` to access it directly — no prop chains.
+
+**TR:** Context, React'in yerleşik state paylaşım mekanizmasıdır. Olmadan, `user` ve `signOut`'u her ihtiyaç duyan bileşene prop olarak zincirden geçirmek zorunda kalırsın (`prop drilling`). `AuthProvider` tüm uygulamayı sarar, auth state'ini tutar; herhangi bir bileşen doğrudan `useAuth()` çağırarak erişebilir — prop zinciri gerekmez.
+
+---
+
+#### React Router Nested Routes / İç İçe Route'lar
+**EN:** In React Router v6, a parent route that renders `<Outlet />` acts as a layout host. Child routes render into that outlet. Here, `/admin` renders `<AdminLayout />` (sidebar + topbar), and the `index` child renders `<Dashboard />` inside the layout's `<Outlet />`. Adding more admin pages later is a one-liner: `<Route path="products" element={<Products />} />`.
+
+**TR:** React Router v6'da `<Outlet />` render eden bir üst route, layout sunucusu gibi davranır. Alt route'lar bu outlet'e render olur. Burada `/admin`, `<AdminLayout />`'ı (sidebar + topbar) render eder; `index` alt route'u ise layout'un `<Outlet />`'ına `<Dashboard />`'ı render eder. İleride daha fazla admin sayfası eklemek tek satırdır: `<Route path="products" element={<Products />} />`.
+
+---
+
+#### ProtectedRoute Pattern
+**EN:** A `ProtectedRoute` component wraps any route that requires authentication. It reads auth state from context — if loading, shows a spinner; if no user, redirects to login; if `requireAdmin` is set and role ≠ `admin`, also redirects. This centralizes auth enforcement: you don't scatter `if (!user) navigate('/login')` calls across every page.
+
+**TR:** `ProtectedRoute` bileşeni, kimlik doğrulaması gerektiren tüm route'ları sarar. Context'ten auth state'ini okur — yükleniyorsa spinner gösterir; kullanıcı yoksa login'e yönlendirir; `requireAdmin` ayarlıysa ve rol `admin` değilse yine yönlendirir. Bu, auth zorunluluğunu merkezileştirir: her sayfaya `if (!user) navigate('/login')` çağrısı serpiştirmek zorunda kalmazsın.
+
+---
+
+### Technical Decisions / Teknik Kararlar
+
+| Decision / Karar | Rationale / Gerekçe |
+|---|---|
+| `@tailwindcss/vite` (not PostCSS) | Native Vite plugin, faster dev builds / Native Vite plugin, daha hızlı geliştirme build'i |
+| `localStorage` for token | Simple persistence across page refreshes; sufficient for admin-only tool / Sayfa yenilemelerinde basit kalıcılık; admin paneli için yeterli |
+| Axios interceptor for auth | Centralized header injection — no per-call boilerplate / Merkezi header enjeksiyonu — her çağrıda tekrar yok |
+| Context API (not Redux/Zustand) | Auth state is simple; global state lib is overkill / Auth state basittir; global state kütüphanesi aşırıya kaçar |
+| `requireAdmin` flag on ProtectedRoute | Same component handles both "must be logged in" and "must be admin" cases / Aynı bileşen her iki durumu da yönetir |
+| Nested routes with `<Outlet />` | Admin layout (sidebar+header) shared across all admin pages without repetition / Admin layout tüm admin sayfalarında tekrar etmeden paylaşılır |
+| `VITE_` prefix on env vars | Vite only exposes env vars prefixed with `VITE_` to the browser bundle (security) / Vite yalnızca `VITE_` önekli değişkenleri tarayıcıya açar (güvenlik) |
+
+---
+
+### Issues & Fixes / Sorunlar ve Çözümler
+
+**EN:** `npx tailwindcss init -p` threw an error because Tailwind v4 removed the `init` command entirely. Fix: install `@tailwindcss/vite` and use `@import "tailwindcss"` in `index.css` — no config file needed.
+
+**TR:** `npx tailwindcss init -p` hata verdi çünkü Tailwind v4, `init` komutunu tamamen kaldırdı. Çözüm: `@tailwindcss/vite` kuruldu ve `index.css`'e `@import "tailwindcss"` eklendi — konfigürasyon dosyasına gerek yok.
+
+---
+
 ## Revised Project Plan / Revize Proje Planı
 
-### Status as of Day 8 / Gün 8 Sonu İtibarıyla Durum
+### Status as of Day 9 / Gün 9 Sonu İtibarıyla Durum
 
 | Module / Modül | Status / Durum |
 |---|---|
@@ -659,7 +757,8 @@ Biriken backend borcu kapatıldı: CORS middleware, pagination, product images m
 | Product images | ✅ |
 | Seed data script | ✅ |
 | Docker | ✅ |
-| React frontend | ❌ |
+| React frontend — setup + admin auth layer | ✅ |
+| React frontend — admin panel modules | ❌ |
 | Flutter mobile | ❌ |
 | AI integration | ❌ |
 
