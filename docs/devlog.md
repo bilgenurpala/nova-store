@@ -739,9 +739,139 @@ Backend tamam. Bugün React web frontend'ini ayağa kaldırdık: Vite + TypeScri
 
 ---
 
+---
+
+## Day 10 · 2026-04-15 — Admin Panel (Figma) / Admin Panel (Figma Tasarımı)
+
+### Summary
+With the backend complete and the auth layer in place, today we opened the Figma file directly and coded the entire admin panel against the design. We read the Design System page (color tokens, typography), then pulled Dashboard, Products, and Orders frames one by one and converted them into fully functional React pages connected to the live API.
+
+### Özet
+Backend tamamlanmış ve auth katmanı kuruluyken, bugün Figma dosyasını doğrudan açtık ve admin panelin tamamını tasarıma bakarak kodladık. Design System sayfasından renk token'larını ve tipografiyi okuduk, ardından Dashboard, Products ve Orders frame'lerini tek tek çekip canlı API'ya bağlı tam işlevli React sayfalarına dönüştürdük.
+
+---
+
+### What We Did / Ne Yaptık
+
+- Connected Figma MCP — read all 11 pages + Design System tokens (colors, typography) directly from file / Figma MCP bağlandı — tüm 11 sayfa + Design System token'ları (renkler, tipografi) doğrudan dosyadan okundu
+- `src/index.css` — added CSS custom properties for all design tokens + Inter font via Google Fonts / Tüm design token'lar için CSS değişkenleri + Google Fonts üzerinden Inter fontu eklendi
+- `lucide-react` installed for icons (Dashboard, Package, ShoppingCart, Users, LogOut) / İkonlar için lucide-react kuruldu
+- `Sidebar.tsx` — rebuilt from Figma: dark `#1a1a24` bg, `#0071e3` active item with 3px white left bar, 48px nav items / Figma'dan yeniden yazıldı: koyu arka plan, mavi aktif item, 3px beyaz sol çizgi
+- `AdminLayout.tsx` — rebuilt: sticky white header (72px), page title from route, avatar circle, content offset for sidebar / Yeniden yazıldı: yapışkan beyaz header, route'dan sayfa başlığı, avatar dairesi
+- `src/api/products.ts` — CRUD endpoints (getProducts, createProduct, updateProduct, deleteProduct) / CRUD endpoint'leri
+- `src/api/orders.ts` — getAdminOrders, getOrder, updateOrderStatus / Admin sipariş endpoint'leri
+- `src/api/categories.ts` — getCategories, createCategory, updateCategory, deleteCategory / Kategori endpoint'leri
+- `Dashboard.tsx` — 4 stat cards with colored left-accent bars, 12-month bar chart (opacity gradient), recent orders table wired to API / 4 stat kartı (renkli sol çizgi), 12 aylık bar chart (opaklık gradyanı), API'ya bağlı son siparişler tablosu
+- `Products.tsx` — full product table (image, name, category, price, stock, status badge, edit/delete), search input, category filter tabs, pagination, Add/Edit modal (all fields, category dropdown) / Tam ürün tablosu, arama, kategori filtreleri, pagination, Add/Edit modal
+- `Orders.tsx` — status filter pills (All, Pending, Paid, Shipped, Delivered, Cancelled), search, order table with customer avatar, items preview, status badge, slide-in Order Detail panel (items, totals, status update dropdown) / Durum filtre pill'leri, arama, sipariş tablosu, slayt detay paneli
+- `App.tsx` — added `/admin/products` and `/admin/orders` routes / Yeni route'lar eklendi
+
+---
+
+### Key Concepts / Temel Kavramlar
+
+#### Figma MCP — Design-to-Code Workflow
+**EN:** The Figma MCP (Model Context Protocol) plugin connects Claude directly to a Figma file. Instead of looking at screenshots and guessing values, we call `get_design_context` on a specific node and receive exact pixel values, hex colors, font weights, and even generated React+Tailwind code as a starting point. The workflow: read the Design System page first (global tokens), then pull each screen by its node ID.
+
+**TR:** Figma MCP plugin'i, Claude'u doğrudan bir Figma dosyasına bağlar. Ekran görüntülerine bakıp değerleri tahmin etmek yerine, belirli bir node üzerinde `get_design_context` çağırırız ve tam piksel değerleri, hex renkler, font ağırlıkları ve başlangıç noktası olarak oluşturulmuş React+Tailwind kodu alırız. İş akışı: önce Design System sayfasını oku (global token'lar), ardından her ekranı node ID'siyle çek.
+
+---
+
+#### CSS Custom Properties as Design Tokens
+**EN:** Instead of hardcoding `#0071e3` across 20 files, we define `--color-primary: #0071e3` once in `:root` and use `var(--color-primary)` everywhere. When the brand color changes, you update one line. This is the CSS equivalent of a design system token — the same value drives both the Figma component and the React component.
+
+**TR:** `#0071e3` değerini 20 dosyaya yazmak yerine `:root`'ta bir kez `--color-primary: #0071e3` tanımlıyoruz ve her yerde `var(--color-primary)` kullanıyoruz. Marka rengi değiştiğinde bir satırı güncelliyorsunuz. Bu, design system token'ının CSS karşılığıdır — aynı değer hem Figma component'ini hem de React component'ini yönlendirir.
+
+---
+
+#### Inline Styles vs Tailwind — When to Use Which
+**EN:** Tailwind utility classes work best for responsive, component-level styling. But when values come directly from a design spec (exact pixel measurements, CSS variables, dynamic inline values), inline styles are cleaner and more maintainable. In this admin panel we use inline styles for layout and design-token-driven values, keeping the code a direct translation of Figma's output.
+
+**TR:** Tailwind utility sınıfları responsive, component düzeyinde stillendirme için en iyi sonucu verir. Ancak değerler doğrudan bir design spec'ten geldiğinde (tam piksel ölçümleri, CSS değişkenleri, dinamik inline değerler), inline stiller daha temiz ve sürdürülebilir olur. Bu admin panelinde layout ve design-token destekli değerler için inline stiller kullanarak kodu Figma çıktısının doğrudan bir çevirisine dönüştürdük.
+
+---
+
+#### Slide-in Detail Panel Pattern
+**EN:** Rather than a full-page route for each order, we use a slide-in panel: a fixed `position: fixed` element that overlays the right side of the screen. An invisible overlay `div` behind it catches outside clicks to close. This is the standard admin UX pattern — fast, no navigation, context preserved.
+
+**TR:** Her sipariş için tam sayfa route kullanmak yerine slayt-giriş panel kullanıyoruz: ekranın sağ tarafını kaplayan `position: fixed` bir element. Arkasındaki görünmez overlay `div`, dışarı tıklamaları yakalayarak paneli kapatır. Bu standart admin UX kalıbıdır — hızlı, navigasyon yok, bağlam korunur.
+
+---
+
+### Technical Decisions / Teknik Kararlar
+
+| Decision / Karar | Rationale / Gerekçe |
+|---|---|
+| CSS custom properties for tokens | Single source of truth; matches Figma variables / Tek kaynak; Figma değişkenleriyle uyumlu |
+| `lucide-react` for icons | Lightweight, tree-shakeable, close match to tabler icons used in Figma / Hafif, tree-shakeable, Figma'daki tabler ikonlarına yakın |
+| Inline styles over Tailwind | Exact Figma values (px, CSS vars) map naturally to inline styles / Tam Figma değerleri inline style'a doğal olarak dönüşür |
+| Slide-in detail panel (Orders) | Faster UX than full-page navigation for admin workflows / Admin iş akışları için tam sayfa navigasyondan daha hızlı UX |
+| `useCallback` + `useEffect` for data fetching | Prevents stale closure issues when filters/pagination change / Filtreler/pagination değiştiğinde stale closure sorunlarını önler |
+| Confirm step before delete | Prevents accidental product deletion / Kazara ürün silinmesini önler |
+
+---
+
+---
+
+## Day 11 · 2026-04-15 — Customer-Facing Web / Müşteri Web Sitesi
+
+### Summary
+With the admin panel finished, today we turned to the customer side of the store. We read the Shop page directly from Figma (node 237:2), extracted the product card pattern, sidebar filter layout, pagination component, and footer structure. The Login–Register Figma page was empty, so those pages were built from the established design system tokens. The result is a complete customer-facing web experience: Homepage, Shop, Login, Register — all sharing a dark Navbar and Footer.
+
+### Özet
+Admin paneli tamamlandıktan sonra bugün müşteri tarafına geçtik. Shop sayfasını doğrudan Figma'dan okuduk (node 237:2): ürün kartı desenini, sidebar filtre düzenini, pagination bileşenini ve footer yapısını çıkardık. Login–Register Figma sayfası boştu, bu yüzden bu sayfalar yerleşik design system token'larından oluşturuldu. Sonuç: Ana Sayfa, Mağaza, Giriş, Kayıt — tümü koyu Navbar ve Footer ile paylaşılan tam bir müşteri deneyimi.
+
+---
+
+### What We Did / Ne Yaptık
+
+- Read Shop page from Figma (node `237:2`) — extracted product card anatomy, sidebar filter sections, sort bar, pagination design / Figma'dan Shop sayfası okundu — ürün kartı anatomisi, sidebar filtre bölümleri, sıralama çubuğu, pagination tasarımı çıkarıldı
+- `Navbar.tsx` — sticky dark `#0f0f13` navbar: "NovaStore" logo (blue+white), centered nav links (active=white/inactive=gray), right icons (Search, Favorites, Cart, User menu with sign-out) / Yapışkan koyu navbar: logo, ortalanmış nav, sağ ikonlar + kullanıcı menüsü
+- `Footer.tsx` — dark `#0f0f13` footer: brand tagline, 3-column links (Shop / Support / Company), copyright bar / Koyu footer: marka, 3 sütun link, telif hakkı çubuğu
+- `CustomerLayout.tsx` — wrapper: `<Navbar />` + `<Outlet />` + `<Footer />` with flex-column layout / `Navbar + Outlet + Footer` sarmalayıcı
+- `HomePage.tsx` — full homepage: hero slider (dark overlay on hero image, 64px headline, two CTA buttons), category icon bar (7 categories with lucide icons), deals banner (blue `#0071e3`, two deal cards), Popular Products grid (live API `GET /products`), New Arrivals grid (live API), features strip (Truck / RefreshCw / ShieldCheck / Headphones icons), brands row, newsletter section / Tam ana sayfa: hero, kategori ikonu çubuğu, kampanya bandı, ürün grid'leri (canlı API), özellikler şeridi, markalar, bülten
+- `ShopPage.tsx` — sidebar filters (Category radio buttons from API, Price Range display, Brand list, Rating list) + 4-column product grid (live API `GET /products` with `category_id` + `search` params) + sort dropdown (client-side price/newest sort) + breadcrumb + pagination + empty state / Sidebar filtreleri (API'dan kategori) + 4 sütun ürün grid'i (canlı API) + sıralama dropdown + breadcrumb + pagination + boş durum
+- `CustomerLogin.tsx` — centered card form: email + password, error banner, calls `POST /auth/login` then `signIn(token)`, redirects to `/` on success / Ortalanmış kart formu: giriş, hata banner'ı, token ile signIn
+- `Register.tsx` — centered card form: email + password + confirm, client-side password validation, calls `POST /auth/register`, redirects to `/` on success / Kayıt formu: şifre doğrulama, API kaydı
+- `api/cart.ts` — `getCart`, `addToCart`, `updateCartItem`, `removeFromCart` functions wired to `GET/POST/PUT/DELETE /cart` / Sepet API fonksiyonları
+- `api/client.ts` — fixed 401 redirect: checks `window.location.pathname.startsWith('/admin')` to route to `/admin/login` vs `/login` / 401 yönlendirmesi düzeltildi: admin ve müşteri route'ları ayrı login sayfalarına yönlendirildi
+- `App.tsx` — added customer routes: `/` (HomePage), `/shop` (ShopPage), `/login` (CustomerLogin), `/register` (Register), all wrapped in `CustomerLayout` / Müşteri route'ları eklendi
+
+---
+
+### Key Concepts / Temel Kavramlar
+
+#### Shared Layout with React Router's `<Outlet />`
+**EN:** React Router's nested route pattern lets us share a persistent layout (Navbar + Footer) across multiple pages without re-rendering it. The parent route renders `<CustomerLayout />` which contains `<Outlet />` — a placeholder that React Router fills with the matched child route's component. This means the Navbar and Footer mount once and stay mounted as the user navigates between Home, Shop, Login, etc.
+
+**TR:** React Router'ın iç içe route deseni, yeniden render etmeden birden fazla sayfada kalıcı bir layout (Navbar + Footer) paylaşmamıza olanak tanır. Üst route `<CustomerLayout />` render eder; bu layout `<Outlet />` içerir — React Router'ın eşleşen alt route'un bileşeniyle doldurduğu bir yer tutucu. Bu sayede Navbar ve Footer bir kez mount edilir ve kullanıcı Ana Sayfa, Mağaza, Giriş sayfaları arasında gezinirken mounted kalır.
+
+---
+
+#### Role-Aware 401 Redirect
+**EN:** The Axios response interceptor previously always redirected to `/admin/login` on a 401. With two separate login pages (`/admin/login` and `/login`), we need context-aware redirection. The fix: check `window.location.pathname.startsWith('/admin')` — admin routes get `/admin/login`, customer routes get `/login`. A more robust solution would use React Router's navigation state, but the window check is simple and reliable for this architecture.
+
+**TR:** Axios response interceptor'ı daha önce her zaman 401'de `/admin/login`'e yönlendiriyordu. İki ayrı login sayfasıyla (`/admin/login` ve `/login`) bağlama duyarlı yönlendirmeye ihtiyacımız var. Çözüm: `window.location.pathname.startsWith('/admin')` kontrolü — admin route'ları `/admin/login`'e, müşteri route'ları `/login`'e gider. Daha sağlam bir çözüm React Router navigation state kullanır, ama bu mimari için window kontrolü basit ve güvenilirdir.
+
+---
+
+#### Product Card: Computed Badges vs. Static Figma Values
+**EN:** Figma showed fixed badges (NEW, BEST SELLER, SALE) on static product cards. In the real app, badges are computed at render time: a product is NEW if it was created within the last 14 days, HOT if stock ≤ 5, SALE if price < $100. This keeps the UI dynamic without requiring a separate badge field in the database. Future iterations can add a real `badge` column to the product model.
+
+**TR:** Figma, statik ürün kartlarında sabit rozetler gösterdi (YENİ, EN ÇOK SATAN, İNDİRİM). Gerçek uygulamada rozetler render sırasında hesaplanır: son 14 günde oluşturulan ürünler YENİ, stok ≤ 5 olanlar HOT, fiyat < $100 olanlar SALE olur. Bu, veritabanına ayrı bir rozet alanı eklemeden UI'yi dinamik tutar. Gelecekte ürün modeline gerçek bir `badge` sütunu eklenebilir.
+
+---
+
+#### Sticky Sidebar with `position: sticky`
+**EN:** The filter sidebar uses `position: sticky` with `top: 132px` (72px navbar + 52px sort bar + 8px gap). This means the sidebar scrolls with the page until it reaches that offset, then stays fixed — the content column scrolls past it. The trick: the sidebar must be a direct child of a flex/grid container that is taller than the sidebar. If the sidebar is wrapped in an extra `div`, sticky stops working.
+
+**TR:** Filtre sidebar'ı `position: sticky` ile `top: 132px` kullanır (72px navbar + 52px sıralama çubuğu + 8px boşluk). Sidebar sayfayla birlikte kayar, bu offset'e ulaşınca sabit kalır — içerik sütunu onun yanından geçer. Püf nokta: sidebar, kendisinden daha uzun bir flex/grid container'ın doğrudan çocuğu olmalıdır. Fazladan bir `div` içine sarılırsa sticky çalışmayı durdurur.
+
+---
+
 ## Revised Project Plan / Revize Proje Planı
 
-### Status as of Day 9 / Gün 9 Sonu İtibarıyla Durum
+### Status as of Day 11 / Gün 11 Sonu İtibarıyla Durum
 
 | Module / Modül | Status / Durum |
 |---|---|
@@ -758,7 +888,11 @@ Backend tamam. Bugün React web frontend'ini ayağa kaldırdık: Vite + TypeScri
 | Seed data script | ✅ |
 | Docker | ✅ |
 | React frontend — setup + admin auth layer | ✅ |
-| React frontend — admin panel modules | ❌ |
+| React frontend — admin panel (Dashboard, Products, Orders) | ✅ |
+| React customer web — Navbar, Footer, CustomerLayout | ✅ |
+| React customer web — HomePage (hero, categories, products, newsletter) | ✅ |
+| React customer web — ShopPage (filters, grid, sort, pagination) | ✅ |
+| React customer web — Login & Register | ✅ |
 | Flutter mobile | ❌ |
 | AI integration | ❌ |
 
@@ -766,10 +900,7 @@ Backend tamam. Bugün React web frontend'ini ayağa kaldırdık: Vite + TypeScri
 
 | Day / Gün | Date / Tarih | Scope / Kapsam |
 |---|---|---|
-| Day 9 | 13 Nisan | React setup + Admin panel foundation / React kurulumu + Admin panel temeli |
-| Day 10 | 14 Nisan | Admin panel core modules / Admin panel core modüller |
-| Day 11 | 15 Nisan | Customer web part 1 / Müşteri web part 1 |
-| Day 12 | 16 Nisan | Customer web part 2 / Müşteri web part 2 |
+| Day 12 | 16 Nisan | Customer web part 2 (Product Detail, Cart page) / Müşteri web part 2 (Ürün Detayı, Sepet) |
 | Day 13 | 17 Nisan | Flutter mobile |
 | Day 14 | 18 Nisan | AI integration / AI entegrasyonu |
 | Day 15 | 19 Nisan | Polish + Docker testing / Cilalama + Docker testi |

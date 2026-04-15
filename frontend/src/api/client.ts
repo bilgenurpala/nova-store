@@ -16,13 +16,14 @@ client.interceptors.request.use((config) => {
   return config
 })
 
-// On 401, clear token and redirect to login
+// On 401, clear token and redirect to the appropriate login page
 client.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('access_token')
-      window.location.href = '/admin/login'
+      const isAdminRoute = window.location.pathname.startsWith('/admin')
+      window.location.href = isAdminRoute ? '/admin/login' : '/login'
     }
     return Promise.reject(error)
   }

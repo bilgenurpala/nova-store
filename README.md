@@ -47,7 +47,11 @@ nova-store/
 │       ├── index.css             ← @import "tailwindcss"
 │       ├── api/
 │       │   ├── client.ts         ← axios instance + interceptors
-│       │   └── auth.ts
+│       │   ├── auth.ts
+│       │   ├── categories.ts
+│       │   ├── products.ts
+│       │   ├── cart.ts
+│       │   └── orders.ts
 │       ├── context/
 │       │   └── AuthContext.tsx   ← AuthProvider, useAuth hook
 │       ├── types/
@@ -56,12 +60,21 @@ nova-store/
 │       │   ├── ProtectedRoute.tsx
 │       │   └── layout/
 │       │       ├── AdminLayout.tsx
-│       │       └── Sidebar.tsx
+│       │       ├── Sidebar.tsx
+│       │       ├── CustomerLayout.tsx  ← Navbar + Outlet + Footer
+│       │       ├── Navbar.tsx          ← dark sticky customer navbar
+│       │       └── Footer.tsx          ← dark 3-column footer
 │       └── pages/
 │           ├── auth/
-│           │   └── Login.tsx
-│           └── admin/
-│               └── Dashboard.tsx
+│           │   ├── Login.tsx           ← admin login
+│           │   ├── CustomerLogin.tsx   ← customer login
+│           │   └── Register.tsx        ← customer register
+│           ├── admin/
+│           │   ├── Dashboard.tsx
+│           │   ├── Products.tsx
+│           │   └── Orders.tsx
+│           ├── HomePage.tsx            ← hero, categories, products, newsletter
+│           └── ShopPage.tsx            ← filters sidebar + product grid (API)
 └── backend/
     ├── requirements.txt
     ├── alembic.ini
@@ -428,7 +441,13 @@ alembic current
 - [x] Seed data script
 - [x] Docker (Dockerfile + docker-compose)
 - [x] React admin panel — auth layer (login, protected routes, layout)
-- [ ] React admin panel — core modules (Products, Categories, Orders)
-- [ ] React customer-facing web
+- [x] React admin panel — Dashboard (stat cards, bar chart, recent orders)
+- [x] React admin panel — Products page (table, search, category filter, Add/Edit modal, delete)
+- [x] React admin panel — Orders page (status filter pills, table, detail panel, status update)
+- [x] React customer web — Navbar (sticky dark, centered nav, user menu)
+- [x] React customer web — Footer (dark, 3-column links)
+- [x] React customer web — Homepage (hero, category bar, deals banner, popular products, new arrivals, features strip, brands, newsletter)
+- [x] React customer web — Shop page (sidebar filters, 4-column product grid, sort, search, pagination — wired to API)
+- [x] React customer web — Login & Register pages
 - [ ] Flutter mobile app
 - [ ] AI features
