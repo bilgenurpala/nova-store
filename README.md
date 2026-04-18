@@ -6,15 +6,16 @@ A full-stack e-commerce platform — a shared REST backend serving both a React 
 
 ## Stack
 
-| Layer      | Technology                        |
-|------------|-----------------------------------|
-| Backend    | Python · FastAPI                  |
-| Database   | Microsoft SQL Server (MSSQL)      |
-| ORM        | SQLAlchemy 2.x                    |
-| Migrations | Alembic                           |
-| Web        | React.js · Vite · Tailwind CSS v4 |
-| Mobile     | Flutter · Dart *(planned)*        |
-| AI         | TBD                               |
+| Layer      | Technology                                         |
+|------------|----------------------------------------------------|
+| Backend    | Python · FastAPI                                   |
+| Database   | Microsoft SQL Server (MSSQL)                       |
+| ORM        | SQLAlchemy 2.x                                     |
+| Migrations | Alembic                                            |
+| Web        | React.js · Vite · TypeScript · Tailwind CSS v4     |
+| Mobile     | Flutter · Dart *(planned)*                         |
+| AI         | Anthropic Claude Haiku (`claude-haiku-4-5-20251001`) |
+| Container  | Docker · docker-compose                            |
 
 ---
 
@@ -23,9 +24,14 @@ A full-stack e-commerce platform — a shared REST backend serving both a React 
 - JWT authentication (register, login, protected routes)
 - Role-based access control (`customer` / `admin`)
 - Category management (admin-only write, public read)
-- Product catalog (admin-only write, public read + search + filter)
+- Product catalog (admin-only write, public read + search + filter + pagination)
+- Product images (URL-based, primary flag)
 - Shopping cart (per-user, auto-created, increment on duplicate add)
 - Order management (create from cart, price snapshot, status lifecycle)
+- Admin panel (Dashboard, Products, Orders, Users)
+- Customer web (HomePage, ShopPage, ProductDetailPage, CartPage, FavoritesPage, ProfilePage, 404)
+- AI chat assistant (Claude Haiku with RAG-lite product context + rule-based fallback)
+- Fully Dockerised (MSSQL 2022 + FastAPI, TCP healthcheck)
 
 ---
 
@@ -35,6 +41,7 @@ A full-stack e-commerce platform — a shared REST backend serving both a React 
 nova-store/
 ├── .gitignore
 ├── README.md
+├── docker-compose.yml
 ├── docs/
 │   └── devlog.md
 ├── frontend/
@@ -43,45 +50,58 @@ nova-store/
 │   ├── package.json
 │   └── src/
 │       ├── main.tsx
-│       ├── App.tsx               ← BrowserRouter + Routes
-│       ├── index.css             ← @import "tailwindcss"
+│       ├── App.tsx               ← BrowserRouter + all Routes
+│       ├── index.css             ← CSS variable tokens + global resets
 │       ├── api/
-│       │   ├── client.ts         ← axios instance + interceptors
+│       │   ├── client.ts         ← axios instance + auth interceptor
 │       │   ├── auth.ts
 │       │   ├── categories.ts
 │       │   ├── products.ts
 │       │   ├── cart.ts
 │       │   └── orders.ts
 │       ├── context/
-│       │   └── AuthContext.tsx   ← AuthProvider, useAuth hook
+│       │   ├── AuthContext.tsx   ← AuthProvider, useAuth hook
+│       │   ├── CartContext.tsx   ← global cart count, drives Navbar badge
+│       │   └── FavoritesContext.tsx ← favorites list, localStorage persist
 │       ├── types/
-│       │   └── index.ts          ← TypeScript interfaces
+│       │   └── index.ts          ← TypeScript interfaces (Product, Order, …)
 │       ├── components/
 │       │   ├── ProtectedRoute.tsx
+│       │   ├── AIChatPanel.tsx   ← 380×560px AI chat panel, Claude integration
+│       │   ├── CategoriesBar.tsx ← horizontal category pill bar (below Navbar)
 │       │   └── layout/
 │       │       ├── AdminLayout.tsx
 │       │       ├── Sidebar.tsx
-│       │       ├── CustomerLayout.tsx  ← Navbar + Outlet + Footer
-│       │       ├── Navbar.tsx          ← dark sticky customer navbar
-│       │       └── Footer.tsx          ← dark 3-column footer
+│       │       ├── CustomerLayout.tsx  ← Navbar + CategoriesBar + Outlet + Footer
+│       │       ├── Navbar.tsx          ← dark sticky navbar, inline SVG icons
+│       │       └── Footer.tsx          ← dark 4-column footer
 │       └── pages/
 │           ├── auth/
 │           │   ├── Login.tsx           ← admin login
 │           │   ├── CustomerLogin.tsx   ← customer login
 │           │   └── Register.tsx        ← customer register
 │           ├── admin/
-│           │   ├── Dashboard.tsx
-│           │   ├── Products.tsx
-│           │   └── Orders.tsx
-│           ├── HomePage.tsx            ← hero, categories, products, newsletter
-│           └── ShopPage.tsx            ← filters sidebar + product grid (API)
+│           │   ├── Dashboard.tsx       ← stat cards, bar chart, recent orders
+│           │   ├── Products.tsx        ← product table, add/edit panel
+│           │   ├── Orders.tsx          ← filter tabs, order table, detail panel
+│           │   └── Users.tsx           ← user table, search, role/status filters
+│           ├── HomePage.tsx            ← hero slider, deals, products, AI chat
+│           ├── ShopPage.tsx            ← sidebar filters, 4-col grid, pagination
+│           ├── ProductDetailPage.tsx   ← gallery, selectors, tabs, related
+│           ├── CartPage.tsx            ← items, qty, remove, promo, summary
+│           ├── FavoritesPage.tsx       ← wishlist grid, empty state
+│           ├── ProfilePage.tsx         ← sidebar menu, personal info form
+│           └── NotFoundPage.tsx        ← 404 with search + popular products
 └── backend/
+    ├── Dockerfile
     ├── requirements.txt
     ├── alembic.ini
     ├── .env.example · .env
     ├── scripts/
     │   ├── create_db.py
     │   ├── create_db.sql
+    │   ├── seed.py               ← seeds categories, products, product images
+    │   ├── fix_admin.py          ← re-hashes admin password, ensures role=admin
     │   └── verify_tables.py
     ├── alembic/
     │   └── versions/
@@ -102,12 +122,13 @@ nova-store/
         │       ├── categories.py
         │       ├── products.py
         │       ├── cart.py
-        │       └── orders.py
+        │       ├── orders.py
+        │       └── ai.py            ← POST /ai/chat — Claude Haiku + fallback
         ├── models/
         │   ├── base.py              ← TimestampedBase (id, created_at, updated_at)
         │   ├── user.py
         │   ├── category.py
-        │   ├── product.py
+        │   ├── product.py           ← Product + ProductImage
         │   ├── cart.py              ← Cart, CartItem
         │   └── order.py             ← Order, OrderItem, Address
         └── schemas/
@@ -117,12 +138,6 @@ nova-store/
             ├── cart.py
             └── order.py
 ```
-
-**Layer rules:**
-- `core/` has no knowledge of `api/` or `models/`
-- `models/` only imports from `core/database.py`
-- `schemas/` are pure Pydantic — no ORM imports
-- `api/` imports from `models/`, `schemas/`, and `core/`
 
 ---
 
@@ -140,6 +155,10 @@ categories
 products
   id PK · name · description · price DECIMAL(10,2) · stock
   category_id FK → categories.id
+  created_at · updated_at
+
+product_images
+  id PK · product_id FK → products.id · url · is_primary
   created_at · updated_at
 
 carts
@@ -165,7 +184,7 @@ addresses
   created_at · updated_at
 ```
 
-All models inherit from `TimestampedBase` (`__abstract__ = True`) which injects `id`, `created_at`, and `updated_at` — no extra table is created.
+All models inherit from `TimestampedBase` (`__abstract__ = True`) which injects `id`, `created_at`, and `updated_at`.
 
 ---
 
@@ -216,7 +235,13 @@ All models inherit from `TimestampedBase` (`__abstract__ = True`) which injects 
 | `GET` | `/api/v1/orders` | Bearer | List current user's orders |
 | `GET` | `/api/v1/orders/{id}` | Bearer | Order detail |
 | `PUT` | `/api/v1/orders/{id}/status` | Admin | Update order status |
-| `GET` | `/api/v1/orders/admin/all` | Admin | All orders (admin view) |
+| `GET` | `/api/v1/orders/admin/all` | Admin | Paginated all orders `{items, total, skip, limit}` |
+
+### AI Chat
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/ai/chat` | — | `{ message, history[] }` → `{ reply }` — Claude Haiku with product context |
 
 ### Health
 
@@ -241,9 +266,9 @@ GET  /auth/me        →  decode JWT → return user profile  [protected]
 | Role | Access |
 |------|--------|
 | `customer` | Cart, Orders (own), public read endpoints |
-| `admin` | All of the above + Category/Product writes + Order status updates + all orders list |
+| `admin` | All of the above + Category/Product writes + Order status updates + all orders list + Users list |
 
-To promote a user to admin, set `role = 'admin'` directly in the database (no public endpoint — intentional).
+To promote a user to admin, run `python scripts/fix_admin.py` or set `role = 'admin'` directly in the database.
 
 ### JWT
 
@@ -255,41 +280,26 @@ Signed with **HS256**. Secret and expiry configured via environment variables.
 
 ---
 
-## Order Lifecycle
-
-```
-POST /orders  →  validates cart + stock  →  creates Order (status=pending)
-              →  snapshots product name + price into OrderItem
-              →  decrements product stock
-              →  saves shipping Address
-              →  clears cart
-              →  returns OrderResponse
-
-PUT /orders/{id}/status  →  admin only  →  pending → paid → shipped → cancelled
-```
-
-**Price snapshot:** `OrderItem.unit_price` stores the product's price at the time of purchase. Future price changes do not affect existing orders.
-
----
-
-## Product Filtering
+## Running with Docker (Recommended)
 
 ```bash
-GET /api/v1/products                                   # all products (first 20)
-GET /api/v1/products?category_id=1                     # by category
-GET /api/v1/products?search=headphone                  # case-insensitive name search
-GET /api/v1/products?category_id=1&search=cable        # combined
-GET /api/v1/products?skip=20&limit=20                  # page 2
+docker-compose up --build
 ```
+
+- API → `http://localhost:8000`
+- Docs → `http://localhost:8000/docs`
+- MSSQL → `localhost:1433`
+
+The compose file starts MSSQL 2022, waits for it via TCP healthcheck, then starts the FastAPI container which runs Alembic migrations automatically on startup.
 
 ---
 
-## Database Setup
+## Running Locally (Without Docker)
 
 ### Prerequisites
 
-- Microsoft SQL Server (any edition) running locally
-- [ODBC Driver 17 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) installed
+- Microsoft SQL Server (any edition)
+- [ODBC Driver 18 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) installed
 
 ### Step 1 — Configure .env
 
@@ -303,14 +313,14 @@ Edit `.env`:
 ```env
 DB_SERVER=localhost\SQLEXPRESS     # or your instance name
 DB_NAME=NovaStoreDB
-DB_DRIVER=ODBC Driver 17 for SQL Server
+DB_DRIVER=ODBC Driver 18 for SQL Server
 DB_TRUSTED_CONNECTION=true         # Windows Auth (recommended for local dev)
 JWT_SECRET_KEY=your-secret-here
 JWT_ALGORITHM=HS256
 JWT_EXPIRE_MINUTES=60
 ```
 
-If using SQL Server authentication (username + password) instead:
+If using SQL Server authentication (username + password):
 
 ```env
 DB_TRUSTED_CONNECTION=false
@@ -336,36 +346,21 @@ alembic upgrade head
 | `0002_add_cart_tables` | `carts`, `cart_items` |
 | `0003_role_and_order_tables` | `role` column on `users`, `orders`, `order_items`, `addresses` |
 
-### Step 4 — Verify
+### Step 4 — Seed data + admin user
 
 ```bat
-py scripts/verify_tables.py
+py scripts/seed.py
+py scripts/fix_admin.py
 ```
 
----
-
-## Running the Backend
-
-> **Windows:** use `py` instead of `python`, and `venv\Scripts\activate` in CMD or `source venv/Scripts/activate` in Git Bash.
+### Step 5 — Run
 
 ```bat
-cd backend
-py -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-py scripts/create_db.py
-alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
 API → `http://localhost:8000`  
 Docs → `http://localhost:8000/docs`
-
-Generate a secure JWT key:
-
-```bat
-py -c "import secrets; print(secrets.token_hex(32))"
-```
 
 ---
 
@@ -378,15 +373,28 @@ npm run dev
 ```
 
 App → `http://localhost:5173`  
-Admin panel → `http://localhost:5173/admin`
+Admin panel → `http://localhost:5173/admin`  
+Admin credentials → `admin@admin.com` / `admin123`
 
-The frontend expects the backend running at `http://localhost:8000`. Configure via `frontend/.env`:
+The frontend expects the backend at `http://localhost:8000`. Configure via `frontend/.env`:
 
 ```env
 VITE_API_URL=http://localhost:8000/api/v1
 ```
 
-> **Note:** Vite only exposes environment variables prefixed with `VITE_` to the browser bundle.
+---
+
+## AI Chat
+
+The AI assistant is available on every page via the floating button (bottom-right corner).
+
+- **With `ANTHROPIC_API_KEY`** set in `backend/.env`: uses Claude Haiku for intelligent, context-aware replies. The endpoint performs a lightweight keyword search of the products table and injects matching products into the system prompt (RAG-lite).
+- **Without an API key**: falls back to a rule-based engine covering greetings, product categories, budget queries, and order questions. The UI works identically in both modes.
+
+```env
+# backend/.env
+ANTHROPIC_API_KEY=sk-ant-...
+```
 
 ---
 
@@ -414,40 +422,48 @@ alembic current
 |---|---|---|---|
 | `DB_SERVER` | ✓ | — | SQL Server hostname or `host\instance` |
 | `DB_NAME` | ✓ | — | Database name |
-| `DB_DRIVER` | — | `ODBC Driver 17 for SQL Server` | ODBC driver name |
+| `DB_DRIVER` | — | `ODBC Driver 18 for SQL Server` | ODBC driver name |
 | `DB_TRUSTED_CONNECTION` | — | `false` | Use Windows Authentication |
-| `DB_USER` | * | — | SQL login username (*if not using trusted connection) |
+| `DB_USER` | * | — | SQL login username *(if not using trusted connection)* |
 | `DB_PASSWORD` | * | — | SQL login password *(never commit)* |
 | `JWT_SECRET_KEY` | ✓ | — | JWT signing key *(never commit)* |
 | `JWT_ALGORITHM` | — | `HS256` | Signing algorithm |
 | `JWT_EXPIRE_MINUTES` | — | `60` | Token lifetime in minutes |
 | `DEBUG` | — | `false` | Enables SQL query logging |
+| `ANTHROPIC_API_KEY` | — | — | Enables Claude Haiku AI chat *(optional)* |
 
 ---
 
 ## Roadmap
 
 - [x] Backend foundation (FastAPI + MSSQL + SQLAlchemy + Alembic)
-- [x] Database models (User, Category, Product, Cart, CartItem, Order, OrderItem, Address)
+- [x] Database models (User, Category, Product, ProductImage, Cart, CartItem, Order, OrderItem, Address)
 - [x] Authentication (register, login, JWT)
 - [x] Role-based access control (customer / admin)
 - [x] Category CRUD (admin-protected writes)
-- [x] Product CRUD (search + filter, admin-protected writes)
+- [x] Product CRUD (search + filter + pagination, admin-protected writes)
 - [x] Shopping cart
 - [x] Order system (create from cart, price snapshot, status lifecycle)
 - [x] CORS middleware
-- [x] Pagination (skip/limit on products and categories)
 - [x] Product images (URL-based, primary flag)
 - [x] Seed data script
-- [x] Docker (Dockerfile + docker-compose)
+- [x] Docker (Dockerfile + docker-compose, MSSQL 2022, TCP healthcheck)
 - [x] React admin panel — auth layer (login, protected routes, layout)
 - [x] React admin panel — Dashboard (stat cards, bar chart, recent orders)
-- [x] React admin panel — Products page (table, search, category filter, Add/Edit modal, delete)
-- [x] React admin panel — Orders page (status filter pills, table, detail panel, status update)
-- [x] React customer web — Navbar (sticky dark, centered nav, user menu)
-- [x] React customer web — Footer (dark, 3-column links)
-- [x] React customer web — Homepage (hero, category bar, deals banner, popular products, new arrivals, features strip, brands, newsletter)
-- [x] React customer web — Shop page (sidebar filters, 4-column product grid, sort, search, pagination — wired to API)
+- [x] React admin panel — Products page (table, Add/Edit panel)
+- [x] React admin panel — Orders page (filter tabs, table, detail panel, status update)
+- [x] React admin panel — Users page (table, search, role/status filters)
+- [x] React customer web — Navbar (sticky dark, inline SVG icons, inline search, categories dropdown)
+- [x] React customer web — CategoriesBar (7 categories, inline SVG icons, centered)
+- [x] React customer web — Footer (dark, 4-column links)
+- [x] React customer web — Homepage (hero slider, deals banner, popular products, new arrivals, testimonials, features strip, brands, newsletter)
+- [x] React customer web — Shop page (sidebar filters, 4-column product grid, sort, pagination)
 - [x] React customer web — Login & Register pages
+- [x] React customer web — Product Detail page (image gallery, color/storage selectors, qty picker, Add to Cart, tabs, specs, related products)
+- [x] React customer web — Cart page (item list, qty update, remove, promo code NOVA10, order summary)
+- [x] React customer web — Favorites page (wishlist grid, empty state)
+- [x] React customer web — Profile page (sidebar menu, personal info form, recent orders)
+- [x] React customer web — 404 page (layered design, search, popular products)
+- [x] AI chat endpoint (Claude Haiku + RAG-lite product context + rule-based fallback)
+- [x] AI chat UI panel (AIChatPanel — slide-up, message history, typing indicator, quick-start chips)
 - [ ] Flutter mobile app
-- [ ] AI features

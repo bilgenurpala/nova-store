@@ -6,7 +6,7 @@ from app.core.database import get_db
 from app.models.category import Category
 from app.models.product import Product
 from app.models.user import User
-from app.schemas.product import ProductCreate, ProductResponse, ProductUpdate
+from app.schemas.product import ProductCreate, ProductResponse, ProductUpdate, ProductsListResponse
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -40,7 +40,7 @@ def create_product(
     return product
 
 
-@router.get("", response_model=list[ProductResponse])
+@router.get("", response_model=ProductsListResponse)
 def list_products(
     db: Session = Depends(get_db),
     category_id: int | None = Query(default=None, description="Filter by category"),
@@ -56,7 +56,10 @@ def list_products(
     if search:
         query = query.filter(Product.name.ilike(f"%{search}%"))
 
-    return query.order_by(Product.name).offset(skip).limit(limit).all()
+    total = query.count()
+    items = query.order_by(Product.name).offset(skip).limit(limit).all()
+
+    return ProductsListResponse(items=items, total=total, skip=skip, limit=limit)
 
 
 @router.get("/{product_id}", response_model=ProductResponse)

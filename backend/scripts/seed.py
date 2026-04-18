@@ -21,6 +21,10 @@ from app.models.product_image import ProductImage
 ADMIN_EMAIL = "admin@novastore.com"
 ADMIN_PASSWORD = "Admin1234!"
 
+# Secondary admin (requested)
+ADMIN2_EMAIL = "admin@admin.com"
+ADMIN2_PASSWORD = "Admin1234!"
+
 CATEGORIES = [
     {"name": "Laptops & Computers", "slug": "laptops-computers"},
     {"name": "Smartphones & Tablets", "slug": "smartphones-tablets"},
@@ -198,7 +202,7 @@ def seed() -> None:
     db = SessionLocal()
 
     try:
-        # Admin user
+        # Admin user (admin@novastore.com)
         if not db.query(User).filter(User.email == ADMIN_EMAIL).first():
             db.add(User(
                 email=ADMIN_EMAIL,
@@ -209,6 +213,18 @@ def seed() -> None:
             print(f"  ✓ Admin user created: {ADMIN_EMAIL}")
         else:
             print(f"  - Admin user already exists: {ADMIN_EMAIL}")
+
+        # Admin user (admin@admin.com)
+        if not db.query(User).filter(User.email == ADMIN2_EMAIL).first():
+            db.add(User(
+                email=ADMIN2_EMAIL,
+                password_hash=hash_password(ADMIN2_PASSWORD),
+                is_active=True,
+                role="admin",
+            ))
+            print(f"  ✓ Admin user created: {ADMIN2_EMAIL}")
+        else:
+            print(f"  - Admin user already exists: {ADMIN2_EMAIL}")
 
         # Categories
         category_map: dict[str, Category] = {}

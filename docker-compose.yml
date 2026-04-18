@@ -10,10 +10,11 @@ services:
     volumes:
       - mssql_data:/var/opt/mssql
     healthcheck:
-      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "NovaStore123!" -Q "SELECT 1" -b
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/1433' 2>/dev/null && echo healthy || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 20s
 
   api:
     build:
@@ -28,6 +29,7 @@ services:
       DB_USER: sa
       DB_PASSWORD: "NovaStore123!"
       DB_NAME: NovaStoreDB
+      DB_DRIVER: "ODBC Driver 18 for SQL Server"
     depends_on:
       db:
         condition: service_healthy

@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { getProducts } from '../api/products'
 import { getCategories } from '../api/categories'
 import type { Product, Category } from '../types'
+import { useCart } from '../context/CartContext'
+import { useFavorites } from '../context/FavoritesContext'
 
 // ─── Badge helpers ────────────────────────────────────────────────────────────
 
@@ -28,157 +30,75 @@ function getBadge(product: Product): string | null {
 
 function ProductCard({ product }: { product: Product }) {
   const badge = getBadge(product)
-  const primaryImage =
-    product.images?.find((i) => i.is_primary) ?? product.images?.[0]
+  const primaryImage = product.images?.find((i) => i.is_primary) ?? product.images?.[0]
+  const navigate = useNavigate()
+  const { addToCart } = useCart()
+  const { isFavorite, toggleFavorite } = useFavorites()
+  const [added, setAdded] = useState(false)
+  const faved = isFavorite(product.id)
+
+  async function handleAddToCart(e: React.MouseEvent) {
+    e.stopPropagation()
+    const ok = await addToCart(product.id)
+    if (ok) {
+      setAdded(true)
+      setTimeout(() => setAdded(false), 1500)
+    } else {
+      navigate('/login')
+    }
+  }
+
+  function handleFave(e: React.MouseEvent) {
+    e.stopPropagation()
+    toggleFavorite(product)
+  }
 
   return (
     <div
-      style={{
-        backgroundColor: '#ffffff',
-        border: '1px solid #d2d2d7',
-        borderRadius: '12px',
-        overflow: 'hidden',
-        transition: 'box-shadow 0.2s, transform 0.2s',
-        cursor: 'pointer',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'
-        e.currentTarget.style.transform = 'translateY(-2px)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = 'none'
-        e.currentTarget.style.transform = 'none'
-      }}
+      onClick={() => navigate(`/product/${product.id}`)}
+      style={{ backgroundColor: '#ffffff', border: '1px solid #d2d2d7', borderRadius: '12px', overflow: 'hidden', transition: 'box-shadow 0.2s, transform 0.2s', cursor: 'pointer' }}
+      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none' }}
     >
       {/* Image */}
-      <div
-        style={{
-          height: '200px',
-          backgroundColor: '#f5f5f7',
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {primaryImage ? (
-          <img
-            src={primaryImage.url}
-            alt={primaryImage.alt_text || product.name}
-            style={{
-              maxHeight: '160px',
-              maxWidth: '80%',
-              objectFit: 'contain',
-            }}
-          />
-        ) : (
-          <span style={{ fontSize: '13px', color: '#6e6e73' }}>image</span>
-        )}
+      <div style={{ height: '200px', backgroundColor: '#f5f5f7', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {primaryImage
+          ? <img src={primaryImage.url} alt={primaryImage.alt_text || product.name} style={{ maxHeight: '160px', maxWidth: '80%', objectFit: 'contain' }} />
+          : <span style={{ fontSize: '13px', color: '#6e6e73' }}>image</span>}
 
         {badge && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '11px',
-              left: '11px',
-              backgroundColor: BADGE_COLORS[badge],
-              color: '#fff',
-              fontSize: '10px',
-              fontWeight: 700,
-              padding: '3px 8px',
-              borderRadius: '4px',
-              letterSpacing: '0.5px',
-            }}
-          >
+          <div style={{ position: 'absolute', top: '11px', left: '11px', backgroundColor: BADGE_COLORS[badge], color: '#fff', fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: '4px', letterSpacing: '0.5px' }}>
             {badge}
           </div>
         )}
 
         <button
-          style={{
-            position: 'absolute',
-            top: '9px',
-            right: '9px',
-            width: '28px',
-            height: '28px',
-            borderRadius: '14px',
-            backgroundColor: '#ffffff',
-            border: '1px solid #d2d2d7',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            fontSize: '14px',
-            color: '#6e6e73',
-          }}
+          onClick={handleFave}
+          style={{ position: 'absolute', top: '9px', right: '9px', width: '28px', height: '28px', borderRadius: '14px', backgroundColor: '#ffffff', border: '1px solid #d2d2d7', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '14px', color: faved ? '#ff3b30' : '#6e6e73', transition: 'color 0.15s' }}
         >
-          ♡
+          {faved ? '♥' : '♡'}
         </button>
       </div>
 
       {/* Info */}
-      <div style={{ padding: '12px 13px 13px' }}>
-        <div
-          style={{
-            fontSize: '12px',
-            fontWeight: 600,
-            color: '#0071e3',
-            marginBottom: '4px',
-            letterSpacing: '0.5px',
-          }}
-        >
+      <div style={{ padding: '12px 13px 14px' }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#0071e3', marginBottom: 4, letterSpacing: '0.5px' }}>
           {product.category?.name?.toUpperCase() ?? ''}
         </div>
-        <div
-          style={{
-            fontSize: '14px',
-            fontWeight: 600,
-            color: '#1d1d1f',
-            marginBottom: '6px',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
+        <div style={{ fontSize: 15, fontWeight: 600, color: '#1d1d1f', marginBottom: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {product.name}
         </div>
-        <div style={{ fontSize: '13px', color: '#fbbf24', marginBottom: '4px' }}>
-          ★★★★☆{' '}
-          <span style={{ color: '#6e6e73' }}>
-            ({Math.floor(Math.random() * 400) + 50})
-          </span>
+        <div style={{ fontSize: 12, color: '#ff9500', marginBottom: 6 }}>
+          ★★★★☆ <span style={{ color: '#6e6e73' }}>({Math.floor(product.id * 37 % 350) + 50})</span>
         </div>
-        <div
-          style={{
-            fontSize: '20px',
-            fontWeight: 700,
-            color: '#1d1d1f',
-            marginBottom: '12px',
-          }}
-        >
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#1d1d1f', marginBottom: 12 }}>
           ${Number(product.price).toLocaleString()}
         </div>
         <button
-          style={{
-            width: '100%',
-            height: '36px',
-            backgroundColor: '#0071e3',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '14px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            transition: 'background 0.15s',
-          }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.backgroundColor = '#0077ed')
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.backgroundColor = '#0071e3')
-          }
+          onClick={handleAddToCart}
+          style={{ width: '100%', height: 36, backgroundColor: added ? '#34c759' : '#0071e3', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}
         >
-          Add to Cart
+          {added ? '✓ Added!' : 'Add to Cart'}
         </button>
       </div>
     </div>
@@ -252,6 +172,7 @@ function RadioItem({
 }) {
   return (
     <label
+      onClick={onChange}
       style={{
         display: 'flex',
         alignItems: 'center',

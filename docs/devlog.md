@@ -869,9 +869,179 @@ Admin paneli tamamlandıktan sonra bugün müşteri tarafına geçtik. Shop sayf
 
 ---
 
+---
+
+## Day 12 · 2026-04-16 — Product Detail & Cart / Ürün Detayı ve Sepet
+
+### Summary
+With the customer layout and main listing pages done, today we tackled the two most complex customer pages: Product Detail and Cart. Both pages were read directly from Figma (nodes 266:19 and 267:19). Product Detail features a full image gallery with thumbnail strip, color/storage chip selectors, a quantity stepper, Add to Cart wired to the real API, a tab bar (Description / Specifications / Reviews), a specs table, and a "You Might Also Like" section from the same category. The Cart page handles authenticated and unauthenticated states, live cart from API, quantity updates, item removal, a promo code mechanism, and a complete order summary with tax calculation.
+
+### Özet
+Müşteri layout'u ve listeleme sayfaları tamamlandıktan sonra bugün iki en karmaşık müşteri sayfasını ele aldık: Ürün Detayı ve Sepet. Her iki sayfa da doğrudan Figma'dan okundu (node 266:19 ve 267:19). Ürün Detayı; thumbnail şeridiyle tam görsel galerisi, renk/depolama chip seçicileri, miktar seçici, gerçek API'ya bağlı Add to Cart, sekme çubuğu (Açıklama / Teknik Özellikler / Yorumlar), özellik tablosu ve aynı kategoriden "Bunları da Beğenebilirsiniz" bölümü içeriyor. Sepet sayfası; giriş yapılmış/yapılmamış durumları, API'dan canlı sepet, miktar güncellemeleri, ürün kaldırma, promosyon kodu mekanizması ve vergi hesaplamalı eksiksiz sipariş özeti yönetiyor.
+
+---
+
+### What We Did / Ne Yaptık
+
+- Read Figma nodes `266:19` (Product Detail, 1440×2420) and `267:19` (Cart, 1440×1424) using `get_design_context` / `get_design_context` ile iki Figma node'u okundu
+- `ProductDetailPage.tsx` (`/product/:id`):
+  - Fetches product by `useParams` → `GET /products/:id` / `useParams` ile ID alınıp ürün çekildi
+  - Main image + thumbnail strip (max 4 thumbnails, selected = blue border) / Ana görsel + thumbnail şeridi
+  - Color selector chips (Natural/Blue/White/Black Titanium — UI only) / Renk seçici chipler (sadece UI)
+  - Storage selector chips (128GB/256GB/512GB/1TB — UI only) / Depolama seçici chipler
+  - Quantity stepper (min 1, max = stock) / Miktar seçici
+  - Add to Cart → `POST /cart/add` with product_id + quantity; shows success/error feedback / Sepete ekle → API çağrısı; başarı/hata geri bildirimi
+  - Add to Wishlist button (outline, Heart icon) / İstek listesine ekle butonu
+  - Delivery info strip (Free Delivery / Easy Returns / Secure Payment) / Teslimat bilgisi
+  - Tab bar: Description (product.description) | Specifications (dynamic spec table) | Reviews (placeholder) / Sekme çubuğu
+  - "You Might Also Like": fetches `GET /products?category_id=X&limit=5`, excludes current product / "Bunları da Beğenebilirsiniz": aynı kategoriden ürünler
+  - Not Found state (product 404) / Bulunamadı durumu
+  - Skeleton loading state / Skeleton yükleme durumu
+- `CartPage.tsx` (`/cart`):
+  - Unauthenticated state: shows sign-in prompt with link to `/login` / Giriş yapılmamış durum: giriş yönlendirmesi
+  - Authenticated: fetches `GET /cart` on mount / Giriş yapılmış: mount'ta sepet çekildi
+  - Cart item rows: thumbnail, category + name + price, quantity stepper (− qty +), Remove button → `DELETE /cart/remove` / Sepet öğe satırları
+  - Quantity change → `PUT /cart/update` with optimistic opacity feedback / Miktar değişimi → PUT isteği, optimistik opaklık geri bildirimi
+  - Promo code input (NOVA10 = 10% off client-side) / Promosyon kodu (NOVA10 = %10 indirim)
+  - Order Summary card: subtotal, shipping (Free in green), tax 8%, promo discount, total / Sipariş özeti kartı
+  - Empty state (cart icon + CTA) / Boş sepet durumu
+  - Sticky order summary (position: sticky, top: 132px) / Yapışkan sipariş özeti
+- `HomePage.tsx` + `ShopPage.tsx` — ProductCard `onClick` now navigates to `/product/:id` / Ürün kartı tıklamaları `/product/:id`'ye yönlendirecek şekilde güncellendi
+- `App.tsx` — added `/product/:id` and `/cart` routes under CustomerLayout / İki yeni route eklendi
+
+---
+
+### Key Concepts / Temel Kavramlar
+
+#### `useParams` — Dynamic Routes
+**EN:** React Router's `useParams` hook reads URL parameters from the matched route pattern. When the route is `/product/:id`, calling `useParams<{ id: string }>()` inside the component gives you `{ id: "42" }`. Always parse to a number with `Number(id)` before sending to the API, and handle the NaN case.
+
+**TR:** React Router'ın `useParams` hook'u, eşleşen route deseninden URL parametrelerini okur. Route `/product/:id` olduğunda, bileşen içinde `useParams<{ id: string }>()` çağırmak `{ id: "42" }` verir. API'ya göndermeden önce `Number(id)` ile sayıya çevirin ve NaN durumunu mutlaka ele alın.
+
+---
+
+#### Optimistic UI — Cart Quantity Updates
+**EN:** When the user clicks − or + on a cart item, we don't wait for the API to confirm before showing the change. Instead, we immediately set `opacity: 0.5` on the updating item (visual feedback that something is happening), fire the API call, then update the cart state with the server's response. If the API call fails, the UI rolls back to the server state. This pattern is called "optimistic update" — you assume success and correct only if wrong.
+
+**TR:** Kullanıcı sepet öğesinde − veya + tıkladığında değişikliği göstermek için API onayını beklemiyoruz. Bunun yerine güncellenen öğeye hemen `opacity: 0.5` uyguluyoruz (bir şeyin olduğuna dair görsel geri bildirim), API çağrısını başlatıyoruz, ardından sepet durumunu sunucunun yanıtıyla güncelliyoruz. API çağrısı başarısız olursa UI sunucu durumuna geri dönüyor. Bu desene "iyimser güncelleme" denir — başarıyı varsayın, yalnızca yanlışsa düzeltin.
+
+---
+
+#### Authenticated vs. Guest State
+**EN:** The Cart page checks `useAuth()` to determine if the user is logged in before making any API calls. An unauthenticated visitor sees a "Sign in to view your cart" card with a link to `/login` — no API calls are made, no errors thrown. This is important because `GET /cart` returns 401 for unauthenticated requests, and the global Axios interceptor would redirect to `/login` anyway, creating a flash of redirect. Checking auth state upfront is a smoother UX.
+
+**TR:** Sepet sayfası, herhangi bir API çağrısı yapmadan önce kullanıcının giriş yapıp yapmadığını belirlemek için `useAuth()` kullanır. Giriş yapmamış bir ziyaretçi, `/login`'e bağlantıyla birlikte "Sepetinizi görüntülemek için giriş yapın" kartı görür — API çağrısı yapılmaz, hata oluşmaz. Bu önemlidir çünkü `GET /cart` kimlik doğrulanmamış istekler için 401 döndürür ve global Axios interceptor zaten `/login`'e yönlendirirdi; bu da bir yönlendirme yanıp sönmesi oluştururdu. Auth durumunu önceden kontrol etmek daha yumuşak bir UX sağlar.
+
+---
+
+---
+
+## Day 13 · 2026-04-16 — Figma-Accurate Frontend Rebuild / Figma'ya Uygun Frontend Yeniden Yapılandırması
+
+### Summary
+Day 13 focused entirely on making every customer-facing page match the Figma designs pixel-precisely. Every section was checked against the live Figma file using the Figma MCP tools (get_design_context, get_screenshot, get_metadata) to extract exact colors, images, layout dimensions, and component specs.
+
+### Özet
+Gün 13 tamamen her müşteri sayfasının Figma tasarımlarıyla piksel hassasiyetinde eşleşmesini sağlamaya odaklandı. Her bölüm, tam renkler, görseller, düzen boyutları ve bileşen özellikleri çıkarmak için Figma MCP araçları (get_design_context, get_screenshot, get_metadata) kullanılarak canlı Figma dosyasıyla karşılaştırıldı.
+
+---
+
+### What We Did / Ne Yaptık
+
+**Navbar.tsx — Full rewrite**
+- Figma asset URLs for all icons (Search, Wishlist, Cart, User head+body)
+- Categories dropdown: 240px white card, 7 items with Lucide icons, hover highlight
+- Logged-out: "Sign In" (bordered) + "Sign Up" (blue filled) buttons
+- Logged-in: icon set + username + dropdown (Admin Panel if admin, Sign Out)
+- Active link detection: white/600 for active path, #6e6e73 for inactive
+- Outside-click closes dropdowns; route change closes categories dropdown
+
+**Footer.tsx — Confirmed correct**
+- #0f0f13 background, "The future of shopping, today." tagline
+- Shop / Support / Company columns with hover-color links
+- Bottom bar: rgba(255,255,255,0.04) bg, centered copyright
+
+**HomePage.tsx — Complete rewrite**
+- Hero slider: 3 slides with Figma background images, ‹/› arrows, dot navigation, 5s auto-advance
+  - Slide 1: MacBook "Next-Gen Tech, At Your Fingertips."
+  - Slide 2: iPhone "Power Meets Elegance."
+  - Slide 3: AirPods "Sound Beyond Imagination."
+- Categories bar (horizontal pills with Lucide icons, hover blue underline)
+- Deals banner (#0071e3): "LIMITED OFFER / Up to 40% Off on Laptops" + "NEW ARRIVAL / iPhone 15 Pro"
+- Popular Products: 4 static cards with actual Figma product images (iPhone, MacBook, Watch, AirPods)
+- New Arrivals: 4 static cards with Figma-matched colored tops
+  - Sony WH-1000XM5: #1a1a21 dark, green "New" badge
+  - iPad Pro 12.9": #f0f2f7 light, green "New" badge
+  - Samsung Galaxy Tab S9: #0f1729 navy, orange "Limited" badge
+  - Microsoft Surface Pro 9: #f5f7fa light, green "New" badge
+- Testimonials: 3 review cards (Ayse K./#8f45f5, Mehmet A./#1754f5, Zeynep B./#12ad6b)
+- Features strip: Free Shipping / Easy Returns / Secure Payment / 24/7 Support
+- Brands: Apple · Samsung · Sony · Microsoft · Bose · Google
+- Newsletter: dark #0f0f13 card with email subscribe
+- AI Chat floating button (#1754f5, bottom-right) with chat panel
+
+**ShopPage.tsx — Card styling update**
+- Category label: #0071e3, 11px uppercase
+- Product name: 15px semi-bold
+- Stars: #ff9500 (Figma orange, not yellow)
+- Price: #0071e3 bold (matches Figma card spec)
+
+**ProductDetailPage.tsx — Polish**
+- Stars: #ff9500 throughout
+- Price: #0071e3 (large price + related card)
+- Stock badge: green #34c759 "IN STOCK" (was red)
+- SPECS table expanded to 6 rows: Category, Price, Stock, Condition, Warranty, Product ID
+
+**CartPage.tsx — Polish**
+- Cart item price: #0071e3 (Figma blue)
+
+**CustomerLogin.tsx + Register.tsx — Confirmed correct**
+- Clean white card, NovaStore logo, blue CTA, focus-ring inputs
+
+**CategoriesBar.tsx** *(new shared component)*
+- Horizontal category pill bar below the Navbar: Phones / Computers / Tablets / Watches / Headphones / TV / Accessories
+- 56px height, `border-bottom: 1px solid #d2d2d7`, white background
+- Each pill: category icon (24×24) + label, hover → `color: #0071e3`
+- Rendered on all CustomerLayout pages via `CustomerLayout.tsx`
+
+**CartContext.tsx** *(new global context)*
+- `CartProvider` wraps the app and exposes `cartCount: number`
+- Fetches `GET /cart` on user login, increments on add, decrements on remove
+- Drives the blue badge on the Navbar cart icon without prop drilling
+
+**FavoritesContext.tsx** *(new global context)*
+- `FavoritesProvider` exposes `favorites: number[]`, `toggleFavorite(id)`, `isFavorite(id)`
+- Persists to `localStorage` so wishlist survives page refresh
+- Drives the heart badge on the Navbar and the filled/outline heart on product cards
+
+**Admin Panel — Rewrites**
+- `admin/Dashboard.tsx` — Stat cards with coloured left-accent bars, Sales Overview 12-month bar chart, Recent Orders table; wired to paginated `GET /orders/admin/all`
+- `admin/Orders.tsx` — Filter tabs (All / Pending / Processing / Shipped / Delivered / Cancelled), orders table, slide-in Order Detail panel with address + items + status updater; wired to `GET /orders/admin/all` + `PUT /orders/:id/status`
+- `admin/Products.tsx` — Product table (image, name, category, price, stock, status, actions), slide-in Add Product form; wired to `GET /products` + `POST /products`
+
+**index.css + CustomerLayout.tsx — Minor updates**
+- `index.css`: CSS variable tokens (`--bg-card`, `--border-default`, `--color-primary`, etc.) for consistent theming across admin and customer pages
+- `CustomerLayout.tsx`: Inserted `<CategoriesBar />` between `<Navbar />` and `<Outlet />`
+
+---
+
+### Technical Notes / Teknik Notlar
+
+**Figma Asset URL Pattern — Caution**
+Figma MCP asset URLs (`https://www.figma.com/api/mcp/asset/{uuid}`) are MCP-protocol-scoped tokens. They work inside the Figma MCP tool calls but **cannot** be used as `<img src>` in a browser — browsers receive 403 responses. At this stage, icon URLs were placed as `<img src>` props (this was later identified as a bug and fixed on Day 15 by replacing all icon references with inline SVGs). Product/hero image URLs extracted from Figma's CDN work correctly as long as the token hasn't expired; for production these should be migrated to a permanent CDN.
+
+**TR:** Figma MCP asset URL'leri MCP protokolü kapsamlı token'lardır. Figma MCP araç çağrıları içinde çalışırlar ancak tarayıcıda `<img src>` olarak **kullanılamazlar** — tarayıcılar 403 yanıtı alır. Bu aşamada ikon URL'leri `<img src>` prop'u olarak yerleştirildi (bu daha sonra Gün 15'te bir hata olarak tespit edildi ve tüm ikon referansları inline SVG'lerle değiştirildi). Figma CDN'inden çıkarılan ürün/hero görsel URL'leri token süresi dolmadığı sürece düzgün çalışır; üretimde kalıcı bir CDN'e taşınmalıdır.
+
+**Hero Slider State**
+The slider uses a `useRef` timer that resets whenever `idx` changes, so manually clicking a dot cancels the auto-advance timer and restarts it — no double-advance bug.
+
+**TR:** Slider, `idx` değiştiğinde sıfırlanan `useRef` zamanlayıcı kullanır, bu nedenle nokta tıklaması otomatik ilerleme zamanlayıcısını iptal eder ve yeniden başlatır.
+
+---
+
 ## Revised Project Plan / Revize Proje Planı
 
-### Status as of Day 11 / Gün 11 Sonu İtibarıyla Durum
+### Status as of Day 13 / Gün 13 Sonu İtibarıyla Durum
 
 | Module / Modül | Status / Durum |
 |---|---|
@@ -893,6 +1063,8 @@ Admin paneli tamamlandıktan sonra bugün müşteri tarafına geçtik. Shop sayf
 | React customer web — HomePage (hero, categories, products, newsletter) | ✅ |
 | React customer web — ShopPage (filters, grid, sort, pagination) | ✅ |
 | React customer web — Login & Register | ✅ |
+| React customer web — ProductDetailPage (gallery, tabs, specs, related) | ✅ |
+| React customer web — CartPage (items, qty, remove, promo, summary) | ✅ |
 | Flutter mobile | ❌ |
 | AI integration | ❌ |
 
@@ -900,8 +1072,270 @@ Admin paneli tamamlandıktan sonra bugün müşteri tarafına geçtik. Shop sayf
 
 | Day / Gün | Date / Tarih | Scope / Kapsam |
 |---|---|---|
-| Day 12 | 16 Nisan | Customer web part 2 (Product Detail, Cart page) / Müşteri web part 2 (Ürün Detayı, Sepet) |
 | Day 13 | 17 Nisan | Flutter mobile |
 | Day 14 | 18 Nisan | AI integration / AI entegrasyonu |
 | Day 15 | 19 Nisan | Polish + Docker testing / Cilalama + Docker testi |
 | Day 16 | 20 Nisan | Final packaging / Final paketleme |
+
+---
+
+## Day 14 · 2026-04-17 — AI Integration / AI Entegrasyonu
+
+### Summary
+Built the full Nova AI assistant feature: a FastAPI chat endpoint on the backend wired to the Claude API (with a smart rule-based fallback for demo mode), plus a polished floating chat panel on the frontend with real message history, typing animation, quick-start suggestion chips, and live API calls.
+
+### Özet
+Nova AI asistan özelliği eksiksiz inşa edildi: backend'de Claude API'ye bağlı bir FastAPI sohbet endpoint'i (demo modu için akıllı kural tabanlı yedek ile birlikte) ve frontend'de gerçek mesaj geçmişi, yazma animasyonu, hızlı başlangıç öneri chip'leri ve canlı API çağrıları olan şık bir kayan sohbet paneli.
+
+---
+
+### What We Did / Ne Yaptık
+
+- `backend/app/api/v1/ai.py` — New router: `POST /api/v1/ai/chat`
+  - Accepts `{ message, history }`, returns `{ reply }`
+  - Queries the products table for catalog context (keyword search, up to 5 products)
+  - Builds a system prompt with the store persona + relevant product data
+  - **If `ANTHROPIC_API_KEY` is set**: calls `claude-haiku-4-5-20251001` via the Anthropic Python SDK
+  - **If no API key**: returns smart rule-based replies covering greetings, laptops, phones, audio, tablets, budget queries, comparison requests, and order questions
+  - Graceful error handling — never returns a 500 to the user
+- `backend/app/main.py` — Registered `ai.router` under `/api/v1`
+- `backend/requirements.txt` — Added `anthropic>=0.25.0`
+- `frontend/src/components/AIChatPanel.tsx` — New full-featured chat panel
+  - Fixed positioning (bottom-right), 380 × 560 px, slide-up open animation
+  - Gradient header (blue → purple) with "N" avatar, status line, close button
+  - Scrollable message area with user bubbles (right, blue) and AI bubbles (left, grey)
+  - Animated typing indicator (3-dot bounce) during API wait
+  - 4 quick-suggestion chips visible before first message
+  - Input field + send button (disabled when empty/loading)
+  - `**bold**` markdown rendering in AI replies
+  - Backdrop overlay on mobile
+  - `Enter` to send, `Shift+Enter` = newline
+  - Auto-scroll to latest message, auto-focus input on open
+- `frontend/src/pages/HomePage.tsx` — Replaced old stub `AIChatButton`
+  - Floating button: chat icon when closed → X icon when open
+  - Green pulse dot indicator (online status)
+  - Mounts `<AIChatPanel open={open} onClose={...} />`
+
+---
+
+### Key Concepts / Temel Kavramlar
+
+#### RAG-lite: Database Context Injection
+**EN:** Rather than giving the AI a static list of all products (which would be huge), the chat endpoint performs a lightweight keyword search of the product table based on the user's message, then injects only those relevant items into the system prompt. This keeps the prompt small, response fast, and answers accurate — a simplified form of Retrieval-Augmented Generation (RAG).
+
+**TR:** AI'ya tüm ürünlerin statik bir listesini vermek yerine (çok büyük olurdu), chat endpoint'i kullanıcının mesajına göre ürün tablosunda hafif bir anahtar kelime araması yapar ve yalnızca ilgili ürünleri sistem prompt'una enjekte eder. Bu, prompt'u küçük, yanıtı hızlı ve cevapları doğru tutar — Retrieval-Augmented Generation (RAG) sisteminin basitleştirilmiş bir biçimi.
+
+#### Graceful Degradation / Zarif Bozunma
+**EN:** The endpoint works in two modes. With an API key, it uses Claude for intelligent, context-aware replies. Without a key, it falls back to a keyword-matching rule engine that covers the most common shopping queries. This means the feature works out of the box in every demo environment — no API key needed to show the UI.
+
+**TR:** Endpoint iki modda çalışır. API anahtarı varsa, bağlam farkında akıllı yanıtlar için Claude kullanır. Anahtar yoksa, en yaygın alışveriş sorgularını kapsayan anahtar kelime eşleştirme kural motoruna geçer. Bu sayede özellik her demo ortamında kutudan çıktığı gibi çalışır — UI'ı göstermek için API anahtarı gerekmez.
+
+---
+
+### Technical Decisions / Teknik Kararlar
+
+| Decision / Karar | Rationale / Gerekçe |
+|---|---|
+| `claude-haiku-4-5-20251001` model | Fastest Claude model; ideal for low-latency chat / En hızlı Claude modeli; düşük gecikmeli sohbet için ideal |
+| `max_tokens=300` | Keeps replies concise; prevents overly long responses / Yanıtları özlü tutar; aşırı uzun yanıtları önler |
+| `history: list[ChatMessage]` in request | Client manages conversation memory; server remains stateless / İstemci sohbet hafızasını yönetir; sunucu stateless kalır |
+| Rule-based fallback | Demo environments work without billing; CI tests don't need real API / Demo ortamları ödeme olmadan çalışır; CI testleri gerçek API gerektirmez |
+| Backdrop on mobile | Prevents background scrolling; standard modal UX pattern / Arka plan kaydırmayı önler; standart modal UX kalıbı |
+| Suggestion chips hidden after first message | Keeps the chat area clean after the conversation starts / Konuşma başladıktan sonra sohbet alanını temiz tutar |
+
+---
+
+### Status as of Day 14 / Gün 14 Sonu İtibarıyla Durum
+
+| Module / Modül | Status / Durum |
+|---|---|
+| Backend foundation | ✅ |
+| Models: User, Category, Product, Cart, CartItem, Order, OrderItem, Address, ProductImage | ✅ |
+| Auth (register, login, JWT) | ✅ |
+| Role system (admin/customer) | ✅ |
+| Category & Product CRUD (admin-protected) | ✅ |
+| Cart system | ✅ |
+| Order system | ✅ |
+| CORS middleware | ✅ |
+| Pagination | ✅ |
+| Product images | ✅ |
+| Seed data script | ✅ |
+| Docker | ✅ |
+| React frontend — setup + admin auth layer | ✅ |
+| React frontend — admin panel (Dashboard, Products, Orders) | ✅ |
+| React customer web — Navbar, Footer, CustomerLayout | ✅ |
+| React customer web — HomePage (hero, categories, products, newsletter) | ✅ |
+| React customer web — ShopPage (filters, grid, sort, pagination) | ✅ |
+| React customer web — Login & Register | ✅ |
+| React customer web — ProductDetailPage (gallery, tabs, specs, related) | ✅ |
+| React customer web — CartPage (items, qty, remove, promo, summary) | ✅ |
+| AI chat endpoint + Claude integration | ✅ |
+| AI chat UI panel (AIChatPanel) | ✅ |
+| Flutter mobile | ❌ |
+
+### Remaining Schedule / Kalan Plan
+
+| Day / Gün | Date / Tarih | Scope / Kapsam |
+|---|---|---|
+| Day 15 | 19 Nisan | Polish + Docker testing / Cilalama + Docker testi |
+| Day 16 | 20 Nisan | Final packaging / Final paketleme |
+
+---
+
+## Day 15 · 2026-04-18 — Full Figma Rebuild, Docker Fixes & Navbar Polish / Tam Figma Yeniden Yapılandırması, Docker Düzeltmeleri ve Navbar Cilalaması
+
+### Summary
+The longest session of the project. Fixed every Docker/backend infrastructure issue blocking local development, then did a complete pixel-perfect Figma pass over every remaining page (Admin Users, Admin Orders/Products/Dashboard polish, FavoritesPage, ProfilePage, NotFoundPage). Finally solved the persistent Navbar problems: replaced all broken Figma API asset URLs with inline SVGs, fixed the search overlay to be a small inline input that sits directly to the left of the search icon without replacing the nav, and centered the CategoriesBar.
+
+### Özet
+Projenin en uzun oturumu. Yerel geliştirmeyi engelleyen tüm Docker/backend altyapı sorunları giderildi, ardından kalan her sayfa (Admin Users, Admin Orders/Products/Dashboard cilalaması, FavoritesPage, ProfilePage, NotFoundPage) üzerinde piksel hassasiyetinde tam Figma geçişi yapıldı. Son olarak kalıcı Navbar sorunları çözüldü: tüm kırık Figma API asset URL'leri inline SVG'lerle değiştirildi, arama overlay'i navbar'ı kaplamazken arama ikonunun hemen solunda küçük bir inline input olacak şekilde düzeltildi ve CategoriesBar ortalandı.
+
+---
+
+### What We Did / Ne Yaptık
+
+**Docker & Backend Infrastructure**
+- `backend/Dockerfile` — Fixed deprecated `apt-key` command: switched to `gpg --dearmor` pipeline for SQL Server repo signing (Debian trixie compatibility)
+- `backend/Dockerfile` — `msodbcsql17` unavailable on current Debian → switched to `msodbcsql18` + `ACCEPT_EULA=Y`
+- `docker-compose.yml` — DB healthcheck was using `sqlcmd` (not installed) → replaced with TCP port check (`bash -c 'cat /dev/null > /dev/tcp/localhost/1433'`)
+- `backend/app/api/v1/orders.py` — `/admin/all` endpoint changed from returning a flat `list[OrderResponse]` to a paginated `{ items, total, skip, limit }` object (frontend expected pagination shape)
+- `backend/scripts/create_db.py` + `seed.py` — Updated ODBC driver string from 17 to 18
+- `backend/app/schemas/auth.py`, `backend/app/schemas/product.py` — Minor schema fixes
+- `backend/app/main.py` — Registered AI router
+- `backend/requirements.txt` — Added `anthropic>=0.25.0`
+
+**Admin Panel — New & Polished Pages**
+- `frontend/src/pages/admin/Users.tsx` *(new)* — Full user management page
+  - Stat cards: Total Users, Active Users, New This Month, Suspended
+  - Search bar + Role/Status filter dropdowns
+  - User table: avatar initials, name, email, role badge, status, join date, action buttons (Edit/Delete)
+  - Matches Figma admin Users node
+- `frontend/src/pages/admin/Orders.tsx` — Complete rewrite
+  - Filter tabs: All / Pending / Processing / Shipped / Delivered / Cancelled with live count badges
+  - Orders table: ORDER #, CUSTOMER, DATE, AMOUNT, STATUS columns
+  - Order Detail slide-in panel: items list, shipping address, status updater dropdown
+  - Wired to real `GET /orders/admin/all` + `PUT /orders/:id/status` APIs
+- `frontend/src/pages/admin/Products.tsx` — Complete rewrite
+  - Product table: PRODUCT (image+name), CATEGORY, PRICE, STOCK, STATUS, ACTIONS columns
+  - Add Product slide-in form panel
+  - Wired to `GET /products` + `POST /products` APIs
+- `frontend/src/pages/admin/Dashboard.tsx` — Bug fixes + polish
+  - Defensive guard for API response shape: handles both flat array and `{items, total}` formats
+  - Fixed duplicate React key warning in bar chart (month letters repeated — switched to index key)
+  - 4 stat cards with coloured left-accent bars (green/red/orange/blue)
+  - Sales Overview bar chart: 12-month static data, opacity gradient bars
+  - Recent Orders table: ORDER #, CUSTOMER, DATE, AMOUNT, STATUS
+
+**Customer Pages — New Pages**
+- `frontend/src/pages/FavoritesPage.tsx` *(new)*
+  - 4-column responsive product grid
+  - Filled red heart on each card; click removes from favorites
+  - Empty state: heart icon + "Your wishlist is empty" + Browse Products CTA
+  - Wired to `FavoritesContext`
+- `frontend/src/pages/ProfilePage.tsx` *(new)*
+  - Left sidebar: avatar circle with initials, 8 menu items (Personal Info / Security / Orders / Favorites / Addresses / Payment Methods / Notifications / Sign Out)
+  - Right panel: Personal Information form (2-column grid: First Name, Last Name, Email, Phone, Location, Website), Bio textarea, Gender radio buttons, Save Changes button
+  - Recent Orders section at bottom
+- `frontend/src/pages/NotFoundPage.tsx` *(new)*
+  - Large layered "404" watermark (120px, stacked opacity)
+  - "Page Not Found" heading, description
+  - Go Home + Browse Shop buttons
+  - Search input for direct recovery
+  - Popular Products fetched from API
+
+**Contexts — New**
+- `frontend/src/context/CartContext.tsx` *(new)* — Global cart count state wired to API
+- `frontend/src/context/FavoritesContext.tsx` *(new)* — Global favorites list with add/remove, persisted in localStorage
+
+**Navbar — Complete Rewrite (Icon & Search Fix)**
+- **Root cause fixed:** All Figma `api/mcp/asset/…` URLs are MCP-protocol-only; they cannot be used as `<img src>` in a browser — every icon was broken/invisible
+- Replaced all icon `<img>` tags with inline SVG components: `SearchIcon`, `HeartIcon`, `CartIcon`, `UserIcon`
+- `HeartIcon` fills red when favorites count > 0
+- Search behavior fixed: clicking Search no longer replaces the entire center nav. A **200×36px inline input** now appears directly to the **left of the search icon** within the right icon flex row — logo, nav links, and all other icons stay visible
+- Results dropdown appears below the inline input with product thumbnails + "See all results" link
+- Removed separate absolute-positioned overlay entirely
+- Logo correctly stays at the **far left** (padding: 48px), center nav absolute-centered, buttons at far right — removed `maxWidth: 1280` constraint that was making content look centered on wide screens
+
+**CategoriesBar — Complete Rewrite**
+- Replaced all Figma `api/mcp/asset/…` URLs with inline SVG icon components (24×24): Phone, Laptop, Tablet, Watch, Headphones, TV, Accessories
+- Items **centered** horizontally (`justifyContent: 'center'`)
+- Removed incorrect `maxWidth: 1280` constraint (was left-aligning items on wide screens)
+
+**App.tsx — New Routes**
+- `/favorites` → `FavoritesPage`
+- `/profile` → `ProfilePage`
+- `*` → `NotFoundPage` (catch-all 404)
+- `/admin/users` → `Users`
+
+---
+
+### Bug Fixes / Hata Düzeltmeleri
+
+| Bug | Fix |
+|---|---|
+| Admin login 401 with `admin@admin.com` | `fix_admin.py` script: re-hashed password with bcrypt, verified role = "admin" |
+| Docker build fails: `apt-key not found` | Switched to `gpg --dearmor` pipeline in Dockerfile |
+| Docker build fails: `msodbcsql17` package 404 | Switched to `msodbcsql18` |
+| DB healthcheck fails (sqlcmd missing) | Replaced with TCP port-check bash one-liner |
+| Admin dashboard blank (JS crash) | `ordersRes.total` was `undefined` when backend returned flat array; added `Array.isArray` guard |
+| Duplicate React key warning in bar chart | Month letters repeat (J, A, M); fixed by using array index as key |
+| Navbar icons invisible | Figma MCP asset URLs not usable in `<img src>`; replaced with inline SVGs |
+| Search replaced entire navbar | Refactored to inline input in right flex row, left of search icon |
+| CategoriesBar left-aligned | `maxWidth` container removed; `justifyContent: center` added |
+| NovaStore logo appeared centered | Removed `maxWidth: 1280` from navbar inner div; now truly full-width with padding |
+
+---
+
+### Key Concepts / Temel Kavramlar
+
+#### Figma MCP Asset URLs Are Not Public
+**EN:** URLs of the form `https://www.figma.com/api/mcp/asset/{uuid}` are valid only within the Figma MCP protocol context — they are signed, session-scoped tokens. Using them as `<img src>` in a browser results in 403/404 responses. Any icon or image extracted this way must be re-implemented as an inline SVG, a local asset, or a public CDN URL.
+
+**TR:** `https://www.figma.com/api/mcp/asset/{uuid}` formundaki URL'ler yalnızca Figma MCP protokolü bağlamında geçerlidir — imzalı, oturum kapsamlı token'lardır. Bunları tarayıcıda `<img src>` olarak kullanmak 403/404 yanıtlarıyla sonuçlanır. Bu şekilde çıkarılan herhangi bir ikon veya görsel, inline SVG, yerel asset veya public CDN URL olarak yeniden uygulanmalıdır.
+
+#### Inline SVG Icons vs. Icon Libraries
+**EN:** For a small, fixed set of icons (search, heart, cart, user, category symbols), hand-crafted inline SVGs are the most reliable approach: zero dependencies, zero network requests, exact control over stroke width / fill / size, and they render identically across all browsers. The trade-off is slightly more JSX verbosity, which is acceptable for a handful of icons.
+
+**TR:** Az sayıda sabit ikon için (arama, kalp, sepet, kullanıcı, kategori sembolleri) elle yazılmış inline SVG'ler en güvenilir yaklaşımdır: sıfır bağımlılık, sıfır ağ isteği, stroke genişliği/dolgu/boyut üzerinde tam kontrol ve tüm tarayıcılarda aynı render. Bunun bedeli biraz daha fazla JSX ayrıntısıdır, bu da az sayıda ikon için kabul edilebilirdir.
+
+---
+
+### Status as of Day 15 / Gün 15 Sonu İtibarıyla Durum
+
+| Module / Modül | Status / Durum |
+|---|---|
+| Backend foundation | ✅ |
+| Models: User, Category, Product, Cart, CartItem, Order, OrderItem, Address, ProductImage | ✅ |
+| Auth (register, login, JWT) | ✅ |
+| Role system (admin/customer) | ✅ |
+| Category & Product CRUD (admin-protected) | ✅ |
+| Cart system | ✅ |
+| Order system | ✅ |
+| CORS middleware | ✅ |
+| Pagination | ✅ |
+| Product images | ✅ |
+| Seed data script | ✅ |
+| Docker (msodbcsql18, gpg key, TCP healthcheck) | ✅ |
+| React frontend — setup + admin auth layer | ✅ |
+| React frontend — admin panel (Dashboard, Products, Orders, Users) | ✅ |
+| React customer web — Navbar (inline SVG icons, inline search) | ✅ |
+| React customer web — CategoriesBar (inline SVGs, centered) | ✅ |
+| React customer web — Footer | ✅ |
+| React customer web — HomePage (hero, categories, products, newsletter, AI chat) | ✅ |
+| React customer web — ShopPage (filters, grid, sort, pagination) | ✅ |
+| React customer web — Login & Register | ✅ |
+| React customer web — ProductDetailPage (gallery, tabs, specs, related) | ✅ |
+| React customer web — CartPage (items, qty, remove, promo, summary) | ✅ |
+| React customer web — FavoritesPage (grid, empty state) | ✅ |
+| React customer web — ProfilePage (sidebar, form, orders) | ✅ |
+| React customer web — NotFoundPage (404, search, popular products) | ✅ |
+| AI chat endpoint + Claude integration | ✅ |
+| AI chat UI panel (AIChatPanel) | ✅ |
+| Flutter mobile | ❌ |
+
+### Remaining Schedule / Kalan Plan
+
+| Day / Gün | Date / Tarih | Scope / Kapsam |
+|---|---|---|
+| Day 16 | 19 Nisan | Polish + final Docker testing / Cilalama + final Docker testi |
+| Day 17 | 20 Nisan | Final packaging & README / Final paketleme ve README |

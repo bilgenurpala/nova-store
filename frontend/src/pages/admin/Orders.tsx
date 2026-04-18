@@ -42,7 +42,7 @@ interface DetailPanelProps {
 }
 
 function DetailPanel({ order, onClose, onStatusUpdated }: DetailPanelProps) {
-  const [status, setStatus] = useState(order?.status ?? 'pending')
+  const [status, setStatus] = useState<string>(order?.status ?? 'pending')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {

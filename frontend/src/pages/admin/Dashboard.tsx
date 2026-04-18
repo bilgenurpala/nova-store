@@ -82,8 +82,11 @@ export default function Dashboard() {
       getAdminOrders({ skip: 0, limit: 4 }),
       getProducts({ skip: 0, limit: 1 }),
     ]).then(([ordersRes, productsRes]) => {
-      setOrders(ordersRes.items)
-      setTotalOrders(ordersRes.total)
+      // Guard: backend may return flat array if container not yet rebuilt
+      const items = Array.isArray(ordersRes as any) ? (ordersRes as any) : (ordersRes.items ?? [])
+      const total = Array.isArray(ordersRes as any) ? (ordersRes as any).length : (ordersRes.total ?? 0)
+      setOrders(items)
+      setTotalOrders(total)
       setTotalProducts(productsRes.total ?? 0)
     }).catch(console.error).finally(() => setLoading(false))
   }, [])
@@ -152,7 +155,7 @@ export default function Dashboard() {
             const opacity = 0.25 + (i / 11) * 0.75
             const isLast = i === 11
             return (
-              <div key={m} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <div style={{
                   width: '100%',
                   height: h,

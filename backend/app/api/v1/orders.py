@@ -118,9 +118,19 @@ def update_order_status(
     return order
 
 
-@router.get("/admin/all", response_model=list[OrderResponse])
+@router.get("/admin/all")
 def list_all_orders(
+    skip: int = 0,
+    limit: int = 50,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin),
-) -> list[Order]:
-    return db.query(Order).order_by(Order.created_at.desc()).all()
+):
+    total = db.query(Order).count()
+    items = (
+        db.query(Order)
+        .order_by(Order.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}

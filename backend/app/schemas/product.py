@@ -78,3 +78,10 @@ class ProductResponse(BaseModel):
     images: list[ProductImageResponse] = []
     created_at: datetime
     updated_at: datetime
+
+
+class ProductsListResponse(BaseModel):
+    items: list[ProductResponse]
+    total: int
+    skip: int
+    limit: int
