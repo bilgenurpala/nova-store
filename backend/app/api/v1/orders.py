@@ -13,7 +13,7 @@ from app.schemas.order import OrderCreate, OrderStatusUpdate, OrderResponse
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
-VALID_STATUSES = {"pending", "paid", "shipped", "cancelled"}
+VALID_STATUSES = {"pending", "paid", "shipped", "delivered", "cancelled"}
 
 
 def _get_order_or_404(order_id: int, db: Session) -> Order:
@@ -76,6 +76,20 @@ def create_order(
     return order
 
 
+@router.get("/my", response_model=list[OrderResponse])
+def list_my_orders(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[Order]:
+    """Alias for mobile app — same as GET /orders"""
+    return (
+        db.query(Order)
+        .filter(Order.user_id == current_user.id)
+        .order_by(Order.created_at.desc())
+        .all()
+    )
+
+
 @router.get("", response_model=list[OrderResponse])
 def list_orders(
     db: Session = Depends(get_db),
@@ -105,12 +119,27 @@ def get_order(
 
 
 @router.put("/{order_id}/status", response_model=OrderResponse)
-def update_order_status(
+def update_order_status_put(
     order_id: int,
     payload: OrderStatusUpdate,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin),
 ) -> Order:
+    order = _get_order_or_404(order_id, db)
+    order.status = payload.status
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+@router.patch("/{order_id}/status", response_model=OrderResponse)
+def update_order_status_patch(
+    order_id: int,
+    payload: OrderStatusUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+) -> Order:
+    """Mobile app uses PATCH — same logic as PUT"""
     order = _get_order_or_404(order_id, db)
     order.status = payload.status
     db.commit()

@@ -1331,11 +1331,160 @@ Projenin en uzun oturumu. Yerel geliştirmeyi engelleyen tüm Docker/backend alt
 | React customer web — NotFoundPage (404, search, popular products) | ✅ |
 | AI chat endpoint + Claude integration | ✅ |
 | AI chat UI panel (AIChatPanel) | ✅ |
-| Flutter mobile | ❌ |
+| Flutter mobile | ✅ |
 
-### Remaining Schedule / Kalan Plan
+---
 
-| Day / Gün | Date / Tarih | Scope / Kapsam |
-|---|---|---|
-| Day 16 | 19 Nisan | Polish + final Docker testing / Cilalama + final Docker testi |
-| Day 17 | 20 Nisan | Final packaging & README / Final paketleme ve README |
+## Day 16 · 2026-04-19 — Flutter Mobile App Complete + Backend Admin Endpoints / Flutter Mobil Uygulama Tamamlandı + Backend Admin Endpoint'leri
+
+### Summary
+The Flutter mobile app was built from scratch and brought to pixel-perfect parity with the Figma design. All major screens are implemented: Home, Shop, Product Detail, Cart, Favorites, Profile, Login, AI Chat, and a full 5-tab Admin Panel. Critical bugs were fixed: missing INTERNET permission, broken image URLs, product card overflow. The backend was also extended with the missing admin endpoints that the mobile app needed.
+
+### Özet
+Flutter mobil uygulama sıfırdan geliştirildi ve Figma tasarımıyla piksel hassasiyetine taşındı. Tüm önemli ekranlar hayata geçirildi: Home, Shop, Product Detail, Cart, Favorites, Profile, Login, AI Chat ve 5 sekmeli tam Admin Panel. Kritik hatalar giderildi: eksik INTERNET izni, bozuk fotoğraf URL'leri, ürün kartı taşması. Backend de mobil uygulamanın ihtiyaç duyduğu eksik admin endpoint'leriyle genişletildi.
+
+---
+
+### What We Did / Ne Yaptık
+
+**Flutter — Proje Altyapısı**
+- `pubspec.yaml` — dependencies: provider, http, shared_preferences, flutter_rating_bar, shimmer, go_router, cached_network_image
+- `lib/config/app_config.dart` — API URL config: `http://10.0.2.2:8000` (Android emulator host)
+- `lib/theme/app_theme.dart` — color tokens: kPrimary, kDark, kBackground, kWhite, kRed, kOrange, kGreen, kBorder, kTextDark, kTextSecondary
+- `lib/main.dart` — MultiProvider setup (AuthProvider, CartProvider, FavoritesProvider), portrait-only orientation, light status bar
+
+**Flutter — Models & Services**
+- `lib/models/product.dart` — Product class with all fields including `description`, `originalPrice`, `badge`; `fromJson()` mapping
+- `lib/models/chat_message.dart` — ChatMessage (role, content)
+- `lib/services/api_service.dart` — Singleton HTTP client; 3-level fallback chain: Backend API → `assets/products.json` → hardcoded mock list; endpoints: products, product, login, register, getMe, cart, orders, admin, AI chat
+- `assets/products.json` — 10 local products with full fields for offline fallback (educational asset management requirement)
+
+**Flutter — Providers**
+- `lib/providers/auth_provider.dart` — JWT token storage via SharedPreferences; `isAdmin` getter; `userName`, `userInitial` derived from email; persist/restore on app restart
+- `lib/providers/cart_provider.dart` — in-memory cart with count badge
+- `lib/providers/favorites_provider.dart` — in-memory favorites with count badge
+
+**Flutter — Ekranlar (Figma birebir)**
+- `main_shell.dart` — 5-tab bottom nav: Home, Shop, Favs, Cart, Profile; cart & favs badge indicators
+- `home/home_screen.dart` — dark AppBar (Nova*Store* logo, robot icon→AI Chat, search, cart badge), hero banner (Shop Smarter / AI-powered), AI Shopping Assistant banner, horizontal category chips (each with unique color), 2-col featured products grid
+- `shop/shop_screen.dart` — search bar in AppBar bottom, filter toggle, category chips, sort sheet, 2-col product grid, navigation to ProductDetailScreen
+- `product/product_detail_screen.dart` — SliverAppBar (320px expanded, product image), category chip, name, star rating, price with discount badge & strikethrough, real product description from JSON, color selector chips, storage selector chips, qty counter, delivery info (Free Delivery/Easy Returns/Secure Payment), 3-tab TabBar (Description/Specifications/Reviews), sticky bottom bar (Add to Cart + Add to Wishlist)
+- `favorites/favorites_screen.dart` — grid with heart toggle
+- `cart/cart_screen.dart` — item list, qty update, remove, order summary
+- `profile/profile_screen.dart` — not-logged-in state; logged-in: blue-bordered avatar, stats row (Orders/Wishlist/Reviews/Points), Admin Panel button (admin only), Recent Order card, Account/Shopping/Preferences menu groups, Sign Out
+- `auth/login_screen.dart` — email/password form, register tab
+- `ai_chat/ai_chat_screen.dart` — chat bubbles, typing indicator, quick reply chips, calls `/ai/chat` endpoint
+- `admin/admin_screen.dart` — dark 5-tab admin: Dashboard (welcome banner, 4 stat cards, weekly bar chart, recent orders, quick actions, AI insight), Products, Orders, Users, Settings
+
+**Flutter — Bug Fixes**
+- `android/app/src/main/AndroidManifest.xml` — Added `INTERNET` permission + `android:usesCleartextTraffic="true"` (root cause of all image failures)
+- Replaced `picsum.photos` (random unrelated images) with specific Unsplash photo IDs for real tech products
+- Replaced `CachedNetworkImage` with `Image.network` + `loadingBuilder`/`errorBuilder` throughout
+- Fixed product card overflow (yellow/black hazard stripes): `childAspectRatio 0.72 → 0.65`, `AspectRatio 1 → 1.1`, added `mainAxisSize: MainAxisSize.min`
+
+**Backend — Admin Endpoints (New)**
+- `app/api/v1/admin.py` *(new file)*
+  - `GET /api/v1/admin/dashboard` — returns `{total_users, total_orders, total_products, total_revenue}` using SQLAlchemy `func.count`/`func.sum`; admin-only
+  - `GET /api/v1/admin/users` — paginated user list `{items, total, page, limit}`; each item: id, email, role, is_active, created_at; admin-only
+- `app/api/v1/orders.py` — Added:
+  - `GET /orders/my` — alias for mobile app compatibility
+  - `PATCH /orders/{id}/status` — mobile app uses PATCH (only PUT existed)
+  - `"delivered"` added to `VALID_STATUSES`
+- `app/main.py` — Registered admin router
+
+---
+
+### Key Concepts / Temel Kavramlar
+
+#### Flutter Provider Pattern / Provider Deseni
+**EN:** Provider is Flutter's recommended state management solution for medium-scale apps. `ChangeNotifier` classes hold state and call `notifyListeners()` when it changes. Widgets wrapped in `Consumer<T>` rebuild only when their specific provider changes — not the whole tree. `context.read<T>()` gives one-time access without subscribing to rebuilds. `MultiProvider` at the root registers all providers at once.
+
+**TR:** Provider, orta ölçekli Flutter uygulamaları için önerilen state yönetim çözümüdür. `ChangeNotifier` sınıfları state'i tutar ve değiştiğinde `notifyListeners()` çağırır. `Consumer<T>` ile sarılmış widget'lar yalnızca kendi provider'ları değiştiğinde yeniden oluşturulur — tüm ağaç değil. `context.read<T>()` rebuild'e abone olmadan tek seferlik erişim sağlar. Kök seviyedeki `MultiProvider` tüm provider'ları tek seferde kaydeder.
+
+#### Offline-First / Çevrimdışı Öncelikli
+**EN:** The app never crashes when there's no network. It tries the backend API first (5-second timeout). If that fails, it loads from `assets/products.json` bundled inside the app binary. If even that fails (corrupt asset), it falls back to a hardcoded list. This 3-level chain means the app is always usable.
+
+**TR:** Ağ olmadığında uygulama asla çökmez. Önce backend API'yi dener (5 saniyelik zaman aşımı). Başarısız olursa uygulama binary'sinin içine gömülü `assets/products.json`'dan yükler. O da başarısız olursa (bozuk asset) hardcoded listeye döner. Bu 3 katmanlı zincir, uygulamanın her zaman kullanılabilir olmasını sağlar.
+
+#### SliverAppBar / Kaydırmalı AppBar
+**EN:** A regular `AppBar` stays fixed at the top. `SliverAppBar` inside a `CustomScrollView` starts large (expandedHeight: 320px, showing the product image) and collapses to a thin bar as the user scrolls down. `pinned: true` keeps the collapsed bar visible so the back button is always accessible. This creates a natural, immersive product detail experience.
+
+**TR:** Normal `AppBar` en üstte sabit kalır. `CustomScrollView` içindeki `SliverAppBar` büyük başlar (expandedHeight: 320px, ürün görüntüsünü gösterir) ve kullanıcı aşağı kaydırdıkça ince bir bara çöker. `pinned: true`, çökmüş barı görünür tutar, böylece geri butonu her zaman erişilebilir olur. Bu doğal, sürükleyici bir ürün detay deneyimi yaratır.
+
+---
+
+### Completion Status / Tamamlanma Durumu
+
+| Module / Modül | Status |
+|---|---|
+| Backend foundation | ✅ |
+| Auth (JWT, roles) | ✅ |
+| Product & Category CRUD | ✅ |
+| Cart & Order system | ✅ |
+| Admin endpoints (dashboard, users) | ✅ |
+| Docker setup | ✅ |
+| React web — Admin panel | ✅ |
+| React web — Customer pages | ✅ |
+| AI chat (Claude Haiku) | ✅ |
+| Flutter mobile app | ✅ |
+
+---
+
+## Day 17 · 2026-04-19 — Frontend AI Fix, English-Only AI & Screenshots / Frontend AI Düzeltmesi, Yalnızca İngilizce AI ve Ekran Görüntüleri
+
+### Summary
+Three targeted fixes: wired the React frontend AI chatbox to the FastAPI backend via a Vite dev-server proxy (it was silently failing before), hardened the Claude system prompt to enforce English-only replies regardless of user input language, and added a full screenshot gallery (React web + Flutter mobile, 28 screenshots) to the README.
+
+### Özet
+Üç hedefli düzeltme: React frontend AI chatbox'ı bir Vite geliştirici sunucusu proxy'si aracılığıyla FastAPI backend'e bağlandı (önceden sessizce başarısız oluyordu), kullanıcı giriş dilinden bağımsız olarak yalnızca İngilizce yanıt verecek şekilde Claude sistem prompt'u güçlendirildi ve README'ye tam bir ekran görüntüsü galerisi (React web + Flutter mobil, 28 ekran görüntüsü) eklendi.
+
+---
+
+### What We Did / Ne Yaptık
+
+- `frontend/vite.config.ts` — Added `server.proxy` config forwarding all `/api` requests to `http://localhost:8000`. Without this, `fetch('/api/v1/ai/chat')` was hitting the Vite dev server (port 5173) instead of FastAPI (port 8000), causing every AI chat message to fail with the "Oops, I couldn't connect" error.
+- `backend/app/api/v1/ai.py` — Strengthened English-only rule in `_build_system_prompt()`. Moved the instruction to the very top of the system prompt as a `CRITICAL RULE` with explicit emphasis, and repeated it at the end. Previously it was one bullet buried in the guidelines list — Claude would still mirror the user's language when Turkish input was detected.
+- `README.md` — Added full Screenshots section: 15 React web screenshots (Sign In, Sign Up, Admin Sign In, Homepage ×2, AI Chatbox, Shop ×2, Favorites, Cart, Profile, Admin Dashboard, Admin Products, Admin Orders, Admin Users) and 13 Flutter mobile screenshots (Sign In, Create Account, Profile, Homepage, Shop, Favorites, Cart, AI Chatbox, Admin Dashboard, Admin Products, Admin Orders, Admin Users, Admin Settings).
+
+---
+
+### Key Concepts / Temel Kavramlar
+
+#### Vite Dev Server Proxy / Vite Geliştirici Sunucusu Proxy'si
+**EN:** A React Vite app runs on port 5173 during development. When the app calls `fetch('/api/v1/...')` with a relative URL, the browser sends the request to port 5173 — not the FastAPI backend on port 8000. Vite's `server.proxy` config intercepts requests matching a path prefix and forwards them to the target server, transparently rewriting the host header (`changeOrigin: true`). This is a dev-time concern only; in production, a reverse proxy (nginx, Caddy) handles the same role.
+
+**TR:** Bir React Vite uygulaması geliştirme sırasında 5173 portunda çalışır. Uygulama `fetch('/api/v1/...')` ile göreli URL çağırdığında, tarayıcı isteği 8000 portundaki FastAPI backend'e değil 5173 portuna gönderir. Vite'ın `server.proxy` ayarı, bir yol ön ekiyle eşleşen istekleri yakalar ve hedef sunucuya iletir, host başlığını şeffaf şekilde yeniden yazar (`changeOrigin: true`). Bu yalnızca geliştirme zamanı bir endişedir; production'da bir reverse proxy (nginx, Caddy) aynı rolü üstlenir.
+
+#### LLM Language Instruction Placement / LLM Dil Talimatının Yerleşimi
+**EN:** Large language models process the system prompt sequentially. Instructions placed early (especially before persona setup) carry more weight than those buried later in a list. A directive like "CRITICAL RULE: always respond in English" at the very top — and repeated at the end — creates a strong, hard-to-ignore constraint. A single bullet point in the middle of guidelines is easy for the model to override when it detects a non-English input.
+
+**TR:** Büyük dil modelleri sistem prompt'unu sıralı olarak işler. Erken yerleştirilen talimatlar (özellikle persona kurulumundan önce) sonradan bir listede gömülü olanlardan daha fazla ağırlık taşır. En üstte — ve sonda tekrarlanan — "CRITICAL RULE: always respond in English" gibi bir yönerge güçlü, görmezden gelinmesi zor bir kısıtlama oluşturur. Yönergelerin ortasındaki tek bir madde, model İngilizce olmayan bir giriş algıladığında kolayca geçersiz kılınabilir.
+
+---
+
+### Technical Decisions / Teknik Kararlar
+
+| Decision / Karar | Rationale / Gerekçe |
+|---|---|
+| `changeOrigin: true` in proxy | Prevents CORS rejection; backend sees `localhost:8000` as origin / CORS reddini önler; backend `localhost:8000`'i kaynak olarak görür |
+| Proxy on `/api` (not `/api/v1`) | Covers all future versioned routes / Gelecekteki tüm versiyonlanmış route'ları kapsar |
+| English instruction at top + bottom of system prompt | Both primacy and recency effects reinforce the rule / Hem ilklik hem sonluk etkileri kuralı pekiştirir |
+
+---
+
+### Completion Status / Tamamlanma Durumu
+
+| Module / Modül | Status |
+|---|---|
+| Backend foundation | ✅ |
+| Auth (JWT, roles) | ✅ |
+| Product & Category CRUD | ✅ |
+| Cart & Order system | ✅ |
+| Admin endpoints (dashboard, users) | ✅ |
+| Docker setup | ✅ |
+| React web — Admin panel | ✅ |
+| React web — Customer pages | ✅ |
+| AI chat (Claude Haiku) | ✅ |
+| Frontend AI chat proxy fix | ✅ |
+| Flutter mobile app | ✅ |
+| Screenshots in README | ✅ |

@@ -13,7 +13,7 @@ A full-stack e-commerce platform — a shared REST backend serving both a React 
 | ORM        | SQLAlchemy 2.x                                     |
 | Migrations | Alembic                                            |
 | Web        | React.js · Vite · TypeScript · Tailwind CSS v4     |
-| Mobile     | Flutter · Dart *(planned)*                         |
+| Mobile     | Flutter · Dart                                     |
 | AI         | Anthropic Claude Haiku (`claude-haiku-4-5-20251001`) |
 | Container  | Docker · docker-compose                            |
 
@@ -35,6 +35,52 @@ A full-stack e-commerce platform — a shared REST backend serving both a React 
 
 ---
 
+## Screenshots
+
+### React Web Frontend
+
+| Sign In | Sign Up | Admin Sign In |
+|---------|---------|---------------|
+| ![Sign In](https://github.com/user-attachments/assets/e1776d40-46cb-4ec4-9c77-9feb790ff5a1) | ![Sign Up](https://github.com/user-attachments/assets/c53be5a0-59e9-4098-8fb6-c23a014c720b) | ![Admin Sign In](https://github.com/user-attachments/assets/f0d7342b-cc2b-4116-8c70-49dfee50d671) |
+
+| Homepage | Homepage (cont.) | AI Chatbox |
+|----------|-----------------|------------|
+| ![Homepage 1](https://github.com/user-attachments/assets/8e0ff2b9-197a-487c-96c0-8e4468751d0e) | ![Homepage 2](https://github.com/user-attachments/assets/91f0fb9d-f68e-4f85-ab04-802710494b8e) | ![AI Chatbox](https://github.com/user-attachments/assets/7b5cda1c-bf7f-458c-a6d8-e37208bc0f05) |
+
+| Shop | Shop Categories | Favorites |
+|------|-----------------|-----------|
+| ![Shop](https://github.com/user-attachments/assets/8860bf5a-9ca6-4f16-a961-8cb919026952) | ![Shop Categories](https://github.com/user-attachments/assets/a8422eb2-394a-4082-8843-1fad0117a1d8) | ![Favorites](https://github.com/user-attachments/assets/e6d3cbe6-fe8c-446b-9f9c-ae6785b02ab4) |
+
+| Cart | Profile | Admin Dashboard |
+|------|---------|-----------------|
+| ![Cart](https://github.com/user-attachments/assets/aa8ba1f0-b828-491f-9c4f-1bd0c1e6bffa) | ![Profile](https://github.com/user-attachments/assets/b7c7aa28-9eea-4eb2-8569-bfdf266345f2) | ![Admin Dashboard](https://github.com/user-attachments/assets/46475daa-89fd-4e2b-98e9-9c50f4d2b945) |
+
+| Admin Products | Admin Orders | Admin Users |
+|----------------|--------------|-------------|
+| ![Admin Products](https://github.com/user-attachments/assets/e76ef1e4-8736-43a3-a344-db43df58e6a7) | ![Admin Orders](https://github.com/user-attachments/assets/a74a5783-0c57-4224-94f9-3787b7cf5209) | ![Admin Users](https://github.com/user-attachments/assets/d2abfccd-9b9e-4de2-b7f0-4d24e1382d92) |
+
+---
+
+### Flutter Mobile App
+
+| Sign In | Create Account | Profile |
+|---------|----------------|---------|
+| ![Sign In](https://github.com/user-attachments/assets/29da084b-75ff-490a-9384-c0fde1e9eb78) | ![Create Account](https://github.com/user-attachments/assets/fa1265e3-d10b-4384-b6fc-f8cdcdfe86da) | ![Profile](https://github.com/user-attachments/assets/dd2dac3c-3b8f-4450-9edf-f9e8f8854a1f) |
+
+| Homepage | Shop | Favorites |
+|----------|------|-----------|
+| ![Homepage](https://github.com/user-attachments/assets/b16f6ea9-bf3f-433e-8a6d-2b358ffc13ba) | ![Shop](https://github.com/user-attachments/assets/d68802d9-1b27-4af5-9bf4-46f397e14a5f) | ![Favorites](https://github.com/user-attachments/assets/27ac0e3f-9174-4da9-afe2-cc3af9fa5c3d) |
+
+| Cart | AI Chatbox | Admin Dashboard |
+|------|------------|-----------------|
+| ![Cart](https://github.com/user-attachments/assets/c866dffd-9508-44ec-9858-e11819adc575) | ![AI Chatbox](https://github.com/user-attachments/assets/076d5215-fadb-4458-8100-5b353917d4dc) | ![Admin Dashboard](https://github.com/user-attachments/assets/24810cdb-cfa6-4dd8-b000-96ce044573ca) |
+
+| Admin Products | Admin Orders | Admin Users | Admin Settings |
+|----------------|--------------|-------------|----------------|
+| ![Admin Products](https://github.com/user-attachments/assets/df18daec-abc2-4d2f-b9b2-a79ebb4db288) | ![Admin Orders](https://github.com/user-attachments/assets/05f18f39-76e4-4d7f-9b93-d34a2e3c437d) | ![Admin Users](https://github.com/user-attachments/assets/3c46540c-d237-4000-bae6-31e953d978a6) | ![Admin Settings](https://github.com/user-attachments/assets/de4540bd-6c15-4680-b33c-268b377de6d8) |
+
+---
+
 ## Project Structure
 
 ```
@@ -44,6 +90,38 @@ nova-store/
 ├── docker-compose.yml
 ├── docs/
 │   └── devlog.md
+├── mobile/
+│   ├── pubspec.yaml
+│   ├── assets/
+│   │   └── products.json          ← offline product data (10 items)
+│   ├── android/app/src/main/
+│   │   └── AndroidManifest.xml    ← INTERNET + cleartext traffic permissions
+│   └── lib/
+│       ├── main.dart              ← app entry, MultiProvider setup
+│       ├── config/
+│       │   └── app_config.dart    ← API base URL config
+│       ├── theme/
+│       │   └── app_theme.dart     ← colour tokens + ThemeData
+│       ├── models/
+│       │   ├── product.dart       ← Product (id, name, price, description, badge…)
+│       │   └── chat_message.dart
+│       ├── providers/
+│       │   ├── auth_provider.dart     ← JWT token, role, SharedPreferences persist
+│       │   ├── cart_provider.dart
+│       │   └── favorites_provider.dart
+│       ├── services/
+│       │   └── api_service.dart   ← HTTP client, 3-level fallback (API→JSON→mock)
+│       └── screens/
+│           ├── main_shell.dart            ← 5-tab bottom nav shell
+│           ├── home/home_screen.dart      ← hero, AI banner, categories, products
+│           ├── shop/shop_screen.dart      ← search, filter, sort, grid
+│           ├── product/product_detail_screen.dart ← SliverAppBar, selectors, tabs
+│           ├── favorites/favorites_screen.dart
+│           ├── cart/cart_screen.dart
+│           ├── profile/profile_screen.dart ← stats, orders, menu, admin button
+│           ├── auth/login_screen.dart
+│           ├── admin/admin_screen.dart    ← 5-tab dark admin panel
+│           └── ai_chat/ai_chat_screen.dart
 ├── frontend/
 │   ├── .env
 │   ├── vite.config.ts
@@ -384,6 +462,61 @@ VITE_API_URL=http://localhost:8000/api/v1
 
 ---
 
+## Running the Flutter Mobile App
+
+### Prerequisites
+
+- Flutter SDK ≥ 3.16.0 installed and on PATH
+- Android emulator (Pixel 8 API 35 recommended) **or** physical device with USB debugging enabled
+
+### Step 1 — Start the backend first
+
+```bat
+cd backend
+venv\Scripts\activate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Step 2 — Run the app
+
+```bat
+cd mobile
+flutter pub get
+flutter run
+```
+
+For a specific device:
+
+```bat
+flutter devices                        # list connected devices
+flutter run -d <device-id>
+```
+
+### Connection URLs
+
+| Target | URL in `lib/config/app_config.dart` |
+|--------|--------------------------------------|
+| Android emulator | `http://10.0.2.2:8000` *(default)* |
+| iOS simulator | `http://localhost:8000` |
+| Physical device | `http://<your-local-ip>:8000` |
+
+### Admin login (mobile)
+
+1. Open the app → tap **Profile** tab → **Sign In**
+2. Email: `admin@admin.com` · Password: `Admin1234!`
+3. After login, Profile tab shows **Admin Panel** button
+4. Admin Panel has 5 tabs: Dashboard · Products · Orders · Users · Settings
+
+### Offline mode
+
+If the backend is not running, the app automatically falls back to:
+1. `assets/products.json` (10 local products)
+2. Hardcoded mock list
+
+All screens work without a backend connection.
+
+---
+
 ## AI Chat
 
 The AI assistant is available on every page via the floating button (bottom-right corner).
@@ -466,4 +599,14 @@ alembic current
 - [x] React customer web — 404 page (layered design, search, popular products)
 - [x] AI chat endpoint (Claude Haiku + RAG-lite product context + rule-based fallback)
 - [x] AI chat UI panel (AIChatPanel — slide-up, message history, typing indicator, quick-start chips)
-- [ ] Flutter mobile app
+- [x] Flutter mobile app — Figma-pixel-perfect screens (Home, Shop, Favorites, Cart, Profile, Login)
+- [x] Flutter — ProductDetailScreen (SliverAppBar, color/storage selectors, qty counter, tabs)
+- [x] Flutter — Admin panel (5-tab dark nav: Dashboard, Products, Orders, Users, Settings)
+- [x] Flutter — AI Chat screen accessible from Home AppBar robot icon + AI banner
+- [x] Flutter — Offline-first: assets/products.json → API → hardcoded mock fallback chain
+- [x] Flutter — Provider pattern: AuthProvider, CartProvider, FavoritesProvider
+- [x] Flutter — AndroidManifest INTERNET permission + cleartext traffic fix
+- [x] Flutter — Product card overflow fix (childAspectRatio tuned, AspectRatio 1.1)
+- [x] Backend — Admin router: GET /admin/dashboard, GET /admin/users
+- [x] Backend — PATCH /orders/{id}/status + GET /orders/my endpoints added
+- [x] Backend — "delivered" added to valid order statuses
