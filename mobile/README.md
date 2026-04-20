@@ -1,6 +1,11 @@
 # Nova Store — Flutter Mobile App
 
-Flutter + Dart ile geliştirilmiş Nova Store e-ticaret platformunun mobil istemcisi. Figma tasarımına piksel hassasiyetinde uygun, offline-first mimariye sahip tam donanımlı bir alışveriş uygulaması.
+![Flutter](https://img.shields.io/badge/Flutter-3.16-02569B?style=flat&logo=flutter&logoColor=white)
+![Dart](https://img.shields.io/badge/Dart-3-0175C2?style=flat&logo=dart&logoColor=white)
+![Provider](https://img.shields.io/badge/State-Provider-orange?style=flat)
+![Offline](https://img.shields.io/badge/Offline-First-success?style=flat)
+
+> The Flutter mobile client for Nova Store. A pixel-perfect Figma implementation with offline-first architecture, Provider-based state management, and a full dark-themed admin panel — all sharing the same FastAPI backend as the React web frontend.
 
 ---
 
@@ -8,38 +13,80 @@ Flutter + Dart ile geliştirilmiş Nova Store e-ticaret platformunun mobil istem
 
 | Technology | Purpose |
 |------------|---------|
-| Flutter ≥ 3.16 | UI framework (cross-platform) |
-| Dart | Language |
-| Provider | State management |
-| http | HTTP client |
-| shared_preferences | JWT token persistence |
-| cached_network_image | Network image loading |
+| Flutter 3.16 | Cross-platform UI framework |
+| Dart 3 | Language |
+| Provider | State management (`ChangeNotifier` + `Consumer`) |
+| http | REST API calls with JWT auth headers |
+| shared_preferences | JWT token and user data persistence across sessions |
+| cached_network_image | Efficient network image loading with placeholder/error states |
 
 ---
 
-## Features
+## Architecture
 
-### Customer Screens
-- **HomeScreen** — Hero banner, AI chat shortcut, category chips, product grid
-- **ShopScreen** — Search bar, category filter chips, sort bottom sheet, 2-column product grid
-- **ProductDetailScreen** — SliverAppBar (expandedHeight 320px, product image), color/storage selector chips, quantity counter, delivery info strip, 3-tab TabBar (Description / Specifications / Reviews), sticky Add to Cart + Wishlist bottom bar
-- **CartScreen** — Item list with quantity update/remove, order summary
-- **FavoritesScreen** — Wishlist grid with heart toggle
-- **ProfileScreen** — Not-logged-in state; logged-in: avatar, stats row (Orders/Wishlist/Reviews/Points), Admin Panel button (admin only), recent order card, account menu groups, Sign Out
+### Offline-First Data Layer
 
-### Auth Screens
-- **LoginScreen** — Email/password form with Register tab, JWT login
+The app never crashes when there is no network. `ApiService` tries data sources in order:
+
+```
+1. Live backend API     (5-second timeout)
+        ↓ fails
+2. assets/products.json (bundled inside the app binary)
+        ↓ fails
+3. Hardcoded mock list  (last resort — always available)
+```
+
+This means every screen renders correctly regardless of network state, making it safe to demo without a running backend.
+
+### Provider State Management
+
+Three `ChangeNotifier` classes are registered at the root via `MultiProvider` in `main.dart`:
+
+| Provider | Responsibility |
+|----------|---------------|
+| `AuthProvider` | JWT token, user email, role (`customer`/`admin`), login/logout, `SharedPreferences` persistence |
+| `CartProvider` | Cart items list, add/remove/update quantity, total price calculation |
+| `FavoritesProvider` | Favorites list, toggle add/remove |
+
+Widgets use `Consumer<T>` to rebuild only when their specific provider changes, not the whole tree. `context.read<T>()` provides one-time access without subscribing to rebuilds.
+
+---
+
+## Screens
+
+### Customer
+
+**HomeScreen** — Hero banner with gradient overlay, AI chat shortcut button, horizontal category chip row, 2-column product grid with rating and price. Tapping any product navigates to `ProductDetailScreen`.
+
+**ShopScreen** — AppBar with inline search field, horizontal category filter chips, sort bottom sheet (price low/high, rating, newest), 2-column product grid with Add to Cart button on each card.
+
+**ProductDetailScreen** — Uses `SliverAppBar` inside a `CustomScrollView` with `expandedHeight: 320`. The product image fills the expanded header and collapses into a thin bar as the user scrolls — the back button remains accessible at all times (`pinned: true`). Below the fold: category chip, product name, star rating row, price with discount badge and strikethrough original price, real description text from the API, color selector chips, storage selector chips, quantity counter, delivery info strip (Free Delivery / Easy Returns / Secure Payment), 3-tab `TabBar` (Description / Specifications / Reviews). A sticky bottom bar holds the Add to Cart and Add to Wishlist buttons.
+
+**CartScreen** — Item list with product image, name, price, and inline quantity +/- controls. Swipe-to-remove or tap the trash icon. Order summary with subtotal and total. Checkout button.
+
+**FavoritesScreen** — 2-column grid. Heart icon on each card toggles favorites state and updates the `FavoritesProvider`. Empty state with icon and CTA.
+
+**ProfileScreen** — Two states: not logged in (sign-in prompt) and logged in (blue-bordered avatar with initials, stats row for Orders / Wishlist / Reviews / Points, Admin Panel button visible only to admins, recent order card, grouped menu items for Account / Shopping / Preferences, Sign Out).
+
+### Auth
+
+**LoginScreen** — Tab bar switching between Sign In and Create Account. Email/password form with validation. On success, stores JWT in `SharedPreferences` via `AuthProvider` and navigates to the home shell.
 
 ### AI Chat
-- **AiChatScreen** — Dark-themed full-screen chat (bg `#0D0D0F`), typing indicator (3-dot bounce), quick reply chips, suggestion chips, calls `POST /api/v1/ai/chat`
-- Accessible via robot icon in HomeScreen AppBar and AI banner on homepage
 
-### Admin Panel (5-tab dark nav)
-- **Dashboard** — Welcome banner, 4 stat cards, weekly bar chart, recent orders, quick actions
-- **Products** — Product list with category, price, stock info
-- **Orders** — Order list with status badges, filter by status
-- **Users** — User list with role badges, search
-- **Settings** — App configuration panel
+**AiChatScreen** — Full-screen dark-themed chat interface (background `#0D0D0F`). Message bubbles: user messages align right in the primary blue, AI messages align left with a subtle left-border accent. Animated 3-dot typing indicator while waiting for a response. Quick reply chips below the first AI message. Suggestion chips above the input bar. Input field with visible cursor and white text on dark fill. Calls `POST /api/v1/ai/chat` with full conversation history — the server is stateless and reconstructs context from the history array each time.
+
+### Admin Panel
+
+A separate 5-tab dark-navigation shell accessible from the Profile screen (admin accounts only):
+
+| Tab | Content |
+|-----|---------|
+| Dashboard | Welcome banner, 4 stat cards, weekly bar chart, recent orders list, quick action buttons |
+| Products | Product list with category, price, stock info |
+| Orders | Order list with status badges, tap for detail |
+| Users | User list with role badges and search |
+| Settings | App configuration panel |
 
 ---
 
@@ -47,28 +94,28 @@ Flutter + Dart ile geliştirilmiş Nova Store e-ticaret platformunun mobil istem
 
 ```
 mobile/
-├── pubspec.yaml                   ← Dependencies + asset declarations
+├── pubspec.yaml                          ← Dependencies + asset declarations
 ├── assets/
-│   └── products.json              ← Offline product data (10 items)
+│   └── products.json                     ← 10 offline products (fallback data)
 ├── android/app/src/main/
-│   └── AndroidManifest.xml        ← INTERNET + cleartext traffic permissions
+│   └── AndroidManifest.xml               ← INTERNET + cleartext traffic permissions
 └── lib/
-    ├── main.dart                  ← App entry, MultiProvider setup
+    ├── main.dart                         ← App entry, MultiProvider setup
     ├── config/
-    │   └── app_config.dart        ← API base URL config
+    │   └── app_config.dart               ← API base URL (change per target device)
     ├── theme/
-    │   └── app_theme.dart         ← Colour tokens + ThemeData
+    │   └── app_theme.dart                ← Colour tokens (kPrimary, kGreen…) + ThemeData
     ├── models/
-    │   ├── product.dart           ← Product (id, name, price, description, badge…)
-    │   └── chat_message.dart
+    │   ├── product.dart                  ← Product model with fromJson factory
+    │   └── chat_message.dart             ← ChatMessage model
     ├── providers/
-    │   ├── auth_provider.dart     ← JWT token, role, SharedPreferences persist
-    │   ├── cart_provider.dart     ← Cart items, add/remove/update
+    │   ├── auth_provider.dart
+    │   ├── cart_provider.dart
     │   └── favorites_provider.dart
     ├── services/
-    │   └── api_service.dart       ← HTTP client, 3-level fallback (API → JSON → mock)
+    │   └── api_service.dart              ← HTTP client + 3-level offline fallback
     └── screens/
-        ├── main_shell.dart                      ← 5-tab bottom nav shell
+        ├── main_shell.dart               ← 5-tab bottom navigation shell
         ├── home/home_screen.dart
         ├── shop/shop_screen.dart
         ├── product/product_detail_screen.dart
@@ -86,73 +133,54 @@ mobile/
 
 ### Prerequisites
 
-- Flutter SDK ≥ 3.16.0 on PATH
-- Android emulator (Pixel 8 API 35 recommended) **or** physical device with USB debugging
+- Flutter SDK ≥ 3.16.0 installed and on `PATH`
+- Android emulator or physical device with USB debugging enabled
 
-### Step 1 — Start the backend first
+Check your setup:
+```bash
+flutter doctor
+```
+
+### Step 1 — Start the backend
 
 ```bash
 cd ../backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Step 2 — Run the app
+Skip this step if you want to run in offline mode (the app will use bundled data).
+
+### Step 2 — Configure the API URL
+
+Edit `lib/config/app_config.dart`:
+
+| Target | URL |
+|--------|-----|
+| Android emulator | `http://10.0.2.2:8000/api/v1` *(default)* |
+| iOS simulator | `http://localhost:8000/api/v1` |
+| Physical device | `http://<your-local-ip>:8000/api/v1` |
+
+### Step 3 — Run
 
 ```bash
 flutter pub get
 flutter run
 ```
 
-For a specific device:
-
+Target a specific device:
 ```bash
-flutter devices          # list connected devices
+flutter devices
 flutter run -d <device-id>
 ```
 
 ---
 
-## Connection URLs
-
-Edit `lib/config/app_config.dart` to match your setup:
-
-| Target | URL |
-|--------|-----|
-| Android emulator | `http://10.0.2.2:8000` *(default)* |
-| iOS simulator | `http://localhost:8000` |
-| Physical device | `http://<your-local-ip>:8000` |
-
----
-
-## Offline Mode
-
-If the backend is not running, the app automatically falls back through a 3-level chain:
-
-1. `assets/products.json` — 10 products bundled inside the app binary
-2. Hardcoded mock list — last resort if asset fails
-
-All screens work without a backend connection.
-
----
-
 ## Admin Login
 
-1. Open the app → tap **Profile** tab → **Sign In**
+1. Tap **Profile** tab → **Sign In**
 2. Email: `admin@admin.com` · Password: `Admin1234!`
-3. After login, Profile tab shows **Admin Panel** button
-4. Admin Panel has 5 tabs: Dashboard · Products · Orders · Users · Settings
-
----
-
-## State Management
-
-The app uses the Provider pattern with three `ChangeNotifier` classes registered at the root via `MultiProvider`:
-
-| Provider | Responsibility |
-|----------|---------------|
-| `AuthProvider` | JWT token, user role, SharedPreferences persistence, login/logout |
-| `CartProvider` | Cart items, add/remove/update quantity, total calculation |
-| `FavoritesProvider` | Favorites list, toggle add/remove |
+3. After login, the Profile tab shows an **Admin Panel** button
+4. The admin panel has 5 tabs: Dashboard · Products · Orders · Users · Settings
 
 ---
 

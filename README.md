@@ -1,37 +1,123 @@
 # Nova Store
 
-A full-stack e-commerce platform — a shared REST backend serving both a React web client and a Flutter mobile app.
+> A production-ready full-stack e-commerce platform built with a shared REST API backend, a React web client, and a Flutter mobile app — all developed from scratch in 17 days following a Figma design system.
+
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?style=flat&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat&logo=typescript&logoColor=white)
+![Flutter](https://img.shields.io/badge/Flutter-3.16-02569B?style=flat&logo=flutter&logoColor=white)
+![Netlify](https://img.shields.io/badge/Netlify-Live-00C7B7?style=flat&logo=netlify&logoColor=white)
+
+**Live Demo →** [superlative-chebakia-900ccf.netlify.app](https://superlative-chebakia-900ccf.netlify.app)
+
+---
+
+## Overview
+
+Nova Store is a complete e-commerce system where a single FastAPI backend serves two independent clients: a React web application and a Flutter mobile app. The three layers share the same database, authentication tokens, and business logic — a customer who adds an item to their cart on web can see it reflected on mobile.
+
+The project covers the full engineering stack: relational database design and migrations, RESTful API design, JWT-based auth with role separation, AI-assisted shopping via Claude Haiku, a pixel-perfect Figma implementation on both web and mobile, Docker containerisation, and Netlify deployment.
 
 ---
 
 ## Stack
 
-| Layer      | Technology                                         |
-|------------|----------------------------------------------------|
-| Backend    | Python · FastAPI                                   |
-| Database   | Microsoft SQL Server (MSSQL)                       |
-| ORM        | SQLAlchemy 2.x                                     |
-| Migrations | Alembic                                            |
-| Web        | React.js · Vite · TypeScript · Tailwind CSS v4     |
-| Mobile     | Flutter · Dart                                     |
-| AI         | Anthropic Claude Haiku (`claude-haiku-4-5-20251001`) |
-| Container  | Docker · docker-compose                            |
+| Layer | Technology |
+|-------|-----------|
+| Backend | Python 3.11 · FastAPI · Uvicorn |
+| Database | Microsoft SQL Server 2022 (MSSQL) |
+| ORM & Migrations | SQLAlchemy 2.x · Alembic |
+| Web Frontend | React 18 · Vite · TypeScript · Tailwind CSS v4 |
+| Mobile | Flutter 3.16 · Dart · Provider |
+| AI | Anthropic Claude Haiku (`claude-haiku-4-5-20251001`) |
+| Auth | JWT HS256 · bcrypt password hashing |
+| Container | Docker · docker-compose |
+| Deployment | Netlify (web frontend) |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────┐
+│              Clients                    │
+│                                         │
+│  React Web (Vite + TypeScript)          │
+│  Flutter Mobile (Dart + Provider)       │
+└────────────────────┬────────────────────┘
+                     │ REST / JSON
+                     ▼
+┌─────────────────────────────────────────┐
+│         FastAPI Backend (Python)        │
+│                                         │
+│  /api/v1/auth      JWT login/register   │
+│  /api/v1/products  Catalog CRUD         │
+│  /api/v1/cart      Per-user cart        │
+│  /api/v1/orders    Order lifecycle      │
+│  /api/v1/admin     Dashboard + Users    │
+│  /api/v1/ai/chat   Claude Haiku + RAG   │
+└────────────────────┬────────────────────┘
+                     │ SQLAlchemy ORM
+                     ▼
+┌─────────────────────────────────────────┐
+│       MS SQL Server 2022 (MSSQL)        │
+│                                         │
+│  users · categories · products          │
+│  product_images · carts · cart_items    │
+│  orders · order_items · addresses       │
+└─────────────────────────────────────────┘
+```
 
 ---
 
 ## Features
 
-- JWT authentication (register, login, protected routes)
-- Role-based access control (`customer` / `admin`)
-- Category management (admin-only write, public read)
-- Product catalog (admin-only write, public read + search + filter + pagination)
-- Product images (URL-based, primary flag)
-- Shopping cart (per-user, auto-created, increment on duplicate add)
-- Order management (create from cart, price snapshot, status lifecycle)
-- Admin panel (Dashboard, Products, Orders, Users)
-- Customer web (HomePage, ShopPage, ProductDetailPage, CartPage, FavoritesPage, ProfilePage, 404)
-- AI chat assistant (Claude Haiku with RAG-lite product context + rule-based fallback)
-- Fully Dockerised (MSSQL 2022 + FastAPI, TCP healthcheck)
+### Backend
+- JWT authentication — register, login, token refresh, protected routes
+- Role-based access control — `customer` vs `admin` with dedicated guard dependencies
+- Full CRUD for categories and products with search, filter, and pagination
+- Shopping cart — auto-created on first access, increments quantity on duplicate adds
+- Order system — creates from cart, snapshots product prices at purchase time, full status lifecycle (pending → processing → shipped → delivered / cancelled)
+- Admin endpoints — real-time dashboard stats, paginated user management
+- AI chat — `POST /api/v1/ai/chat` performs a keyword search of the product catalog and injects matching items into the Claude system prompt (RAG-lite). Falls back to a rule-based engine when no API key is present, so the UI works in every demo environment without billing.
+- Graceful error handling — the AI endpoint never returns a 500; it always delivers a usable response
+- Fully Dockerised — MSSQL 2022 container with TCP healthcheck, Alembic runs on startup
+
+### React Web Frontend
+- Customer-facing storefront: homepage hero, shop with sidebar filters, product detail with gallery and selectors, cart, favorites (localStorage), profile
+- Admin panel: dashboard with charts, product/order/user management tables with slide-in panels
+- AI chat panel — floating button, slide-up panel, typing indicator, conversation history, quick-start chips
+- Axios interceptor attaches JWT to every request; 401 auto-redirects to the correct login page
+- Vite dev-server proxy forwards `/api` to the backend — no CORS configuration needed during development
+
+### Flutter Mobile App
+- Pixel-perfect Figma implementation across all screens
+- Offline-first architecture: tries the live API first (5 s timeout), falls back to a bundled `assets/products.json`, then to a hardcoded mock list — the app never crashes without a network
+- Provider pattern state management: `AuthProvider` (JWT + SharedPreferences persistence), `CartProvider`, `FavoritesProvider`
+- `ProductDetailScreen` uses `SliverAppBar` (expandedHeight 320 px) — the product image collapses into a thin bar as the user scrolls, keeping the back button always accessible
+- Full admin panel with 5-tab dark navigation
+
+---
+
+## Technical Highlights
+
+### RAG-lite AI Context Injection
+Rather than passing the entire product catalog to Claude (expensive and slow), the `/ai/chat` endpoint performs a lightweight keyword search of the product table based on the user's message, then injects only the relevant items into the system prompt. This keeps token usage low, latency short, and answers accurate — a simplified form of Retrieval-Augmented Generation.
+
+### Stateless Conversation History
+The server holds no session state. The client sends the full conversation history with every request (`history: list[ChatMessage]`), and the server reconstructs context from scratch. This makes the backend horizontally scalable with zero additional infrastructure.
+
+### Offline-First Mobile
+Three-level data fallback chain in `ApiService`:
+1. Live backend API (5-second timeout)
+2. `assets/products.json` bundled inside the app binary
+3. Hardcoded mock list
+
+Every screen renders correctly regardless of network state.
+
+### Price Snapshotting
+When an order is created, `unit_price` is copied from the product into the `order_items` row at that moment. Future price changes on the product never retroactively affect historical orders — a critical correctness requirement for any real commerce system.
 
 ---
 
@@ -59,8 +145,6 @@ A full-stack e-commerce platform — a shared REST backend serving both a React 
 |----------------|--------------|-------------|
 | ![Admin Products](https://github.com/user-attachments/assets/e76ef1e4-8736-43a3-a344-db43df58e6a7) | ![Admin Orders](https://github.com/user-attachments/assets/a74a5783-0c57-4224-94f9-3787b7cf5209) | ![Admin Users](https://github.com/user-attachments/assets/d2abfccd-9b9e-4de2-b7f0-4d24e1382d92) |
 
----
-
 ### Flutter Mobile App
 
 | Sign In | Create Account | Profile |
@@ -85,528 +169,179 @@ A full-stack e-commerce platform — a shared REST backend serving both a React 
 
 ```
 nova-store/
-├── .gitignore
 ├── README.md
 ├── docker-compose.yml
 ├── docs/
-│   └── devlog.md
-├── mobile/
-│   ├── pubspec.yaml
-│   ├── assets/
-│   │   └── products.json          ← offline product data (10 items)
-│   ├── android/app/src/main/
-│   │   └── AndroidManifest.xml    ← INTERNET + cleartext traffic permissions
-│   └── lib/
-│       ├── main.dart              ← app entry, MultiProvider setup
-│       ├── config/
-│       │   └── app_config.dart    ← API base URL config
-│       ├── theme/
-│       │   └── app_theme.dart     ← colour tokens + ThemeData
-│       ├── models/
-│       │   ├── product.dart       ← Product (id, name, price, description, badge…)
-│       │   └── chat_message.dart
-│       ├── providers/
-│       │   ├── auth_provider.dart     ← JWT token, role, SharedPreferences persist
-│       │   ├── cart_provider.dart
-│       │   └── favorites_provider.dart
-│       ├── services/
-│       │   └── api_service.dart   ← HTTP client, 3-level fallback (API→JSON→mock)
-│       └── screens/
-│           ├── main_shell.dart            ← 5-tab bottom nav shell
-│           ├── home/home_screen.dart      ← hero, AI banner, categories, products
-│           ├── shop/shop_screen.dart      ← search, filter, sort, grid
-│           ├── product/product_detail_screen.dart ← SliverAppBar, selectors, tabs
-│           ├── favorites/favorites_screen.dart
-│           ├── cart/cart_screen.dart
-│           ├── profile/profile_screen.dart ← stats, orders, menu, admin button
-│           ├── auth/login_screen.dart
-│           ├── admin/admin_screen.dart    ← 5-tab dark admin panel
-│           └── ai_chat/ai_chat_screen.dart
-├── frontend/
-│   ├── .env
-│   ├── vite.config.ts
-│   ├── package.json
-│   └── src/
-│       ├── main.tsx
-│       ├── App.tsx               ← BrowserRouter + all Routes
-│       ├── index.css             ← CSS variable tokens + global resets
-│       ├── api/
-│       │   ├── client.ts         ← axios instance + auth interceptor
-│       │   ├── auth.ts
-│       │   ├── categories.ts
-│       │   ├── products.ts
-│       │   ├── cart.ts
-│       │   └── orders.ts
-│       ├── context/
-│       │   ├── AuthContext.tsx   ← AuthProvider, useAuth hook
-│       │   ├── CartContext.tsx   ← global cart count, drives Navbar badge
-│       │   └── FavoritesContext.tsx ← favorites list, localStorage persist
-│       ├── types/
-│       │   └── index.ts          ← TypeScript interfaces (Product, Order, …)
-│       ├── components/
-│       │   ├── ProtectedRoute.tsx
-│       │   ├── AIChatPanel.tsx   ← 380×560px AI chat panel, Claude integration
-│       │   ├── CategoriesBar.tsx ← horizontal category pill bar (below Navbar)
-│       │   └── layout/
-│       │       ├── AdminLayout.tsx
-│       │       ├── Sidebar.tsx
-│       │       ├── CustomerLayout.tsx  ← Navbar + CategoriesBar + Outlet + Footer
-│       │       ├── Navbar.tsx          ← dark sticky navbar, inline SVG icons
-│       │       └── Footer.tsx          ← dark 4-column footer
-│       └── pages/
-│           ├── auth/
-│           │   ├── Login.tsx           ← admin login
-│           │   ├── CustomerLogin.tsx   ← customer login
-│           │   └── Register.tsx        ← customer register
-│           ├── admin/
-│           │   ├── Dashboard.tsx       ← stat cards, bar chart, recent orders
-│           │   ├── Products.tsx        ← product table, add/edit panel
-│           │   ├── Orders.tsx          ← filter tabs, order table, detail panel
-│           │   └── Users.tsx           ← user table, search, role/status filters
-│           ├── HomePage.tsx            ← hero slider, deals, products, AI chat
-│           ├── ShopPage.tsx            ← sidebar filters, 4-col grid, pagination
-│           ├── ProductDetailPage.tsx   ← gallery, selectors, tabs, related
-│           ├── CartPage.tsx            ← items, qty, remove, promo, summary
-│           ├── FavoritesPage.tsx       ← wishlist grid, empty state
-│           ├── ProfilePage.tsx         ← sidebar menu, personal info form
-│           └── NotFoundPage.tsx        ← 404 with search + popular products
-└── backend/
-    ├── Dockerfile
-    ├── requirements.txt
-    ├── alembic.ini
-    ├── .env.example · .env
-    ├── scripts/
-    │   ├── create_db.py
-    │   ├── create_db.sql
-    │   ├── seed.py               ← seeds categories, products, product images
-    │   ├── fix_admin.py          ← re-hashes admin password, ensures role=admin
-    │   └── verify_tables.py
-    ├── alembic/
-    │   └── versions/
-    │       ├── 20260407_0001_initial_tables.py
-    │       ├── 20260408_0002_add_cart_tables.py
-    │       └── 20260411_0003_role_and_order_tables.py
-    └── app/
-        ├── main.py
-        ├── core/
-        │   ├── config.py            ← Pydantic Settings + DB + JWT config
-        │   ├── database.py          ← engine, SessionLocal, Base, get_db()
-        │   └── security.py          ← bcrypt hashing + JWT create/decode
-        ├── api/
-        │   └── v1/
-        │       ├── dependencies.py  ← get_current_user, get_current_admin
-        │       ├── health.py
-        │       ├── auth.py
-        │       ├── categories.py
-        │       ├── products.py
-        │       ├── cart.py
-        │       ├── orders.py
-        │       └── ai.py            ← POST /ai/chat — Claude Haiku + fallback
-        ├── models/
-        │   ├── base.py              ← TimestampedBase (id, created_at, updated_at)
-        │   ├── user.py
-        │   ├── category.py
-        │   ├── product.py           ← Product + ProductImage
-        │   ├── cart.py              ← Cart, CartItem
-        │   └── order.py             ← Order, OrderItem, Address
-        └── schemas/
-            ├── auth.py
-            ├── category.py
-            ├── product.py
-            ├── cart.py
-            └── order.py
+│   └── devlog.md                  ← 17-day development log (EN + TR)
+├── backend/                       ← FastAPI + SQLAlchemy + Alembic
+├── frontend/                      ← React + Vite + TypeScript
+└── mobile/                        ← Flutter + Dart
 ```
+
+See each subdirectory for its own detailed README.
 
 ---
 
 ## Database Schema
 
 ```
-users
-  id PK · email (unique, indexed) · password_hash · is_active · role
-  created_at · updated_at
-
-categories
-  id PK · name (unique) · slug (unique, indexed)
-  created_at · updated_at
-
-products
-  id PK · name · description · price DECIMAL(10,2) · stock
-  category_id FK → categories.id
-  created_at · updated_at
-
-product_images
-  id PK · product_id FK → products.id · url · is_primary
-  created_at · updated_at
-
-carts
-  id PK · user_id FK → users.id (unique — one cart per user)
-  created_at · updated_at
-
-cart_items
-  id PK · cart_id FK → carts.id · product_id FK → products.id · quantity
-  created_at · updated_at
-
-orders
-  id PK · user_id FK → users.id · status · total_price DECIMAL(10,2)
-  created_at · updated_at
-
-order_items
-  id PK · order_id FK → orders.id · product_id FK → products.id
-  product_name · quantity · unit_price DECIMAL(10,2)
-  created_at · updated_at
-
-addresses
-  id PK · order_id FK → orders.id (unique — one address per order)
-  full_name · line1 · line2 · city · country · postal_code
-  created_at · updated_at
+users           id · email (unique) · password_hash · role · is_active
+categories      id · name (unique) · slug (unique)
+products        id · name · description · price · stock · category_id FK
+product_images  id · product_id FK · url · is_primary
+carts           id · user_id FK (unique — one cart per user)
+cart_items      id · cart_id FK · product_id FK · quantity
+orders          id · user_id FK · status · total_price
+order_items     id · order_id FK · product_id FK · product_name · quantity · unit_price
+addresses       id · order_id FK (unique) · full_name · line1 · city · country · postal_code
 ```
 
-All models inherit from `TimestampedBase` (`__abstract__ = True`) which injects `id`, `created_at`, and `updated_at`.
+All models inherit from `TimestampedBase` which injects `id`, `created_at`, and `updated_at` automatically.
 
 ---
 
 ## API Reference
 
 ### Auth
-
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `POST` | `/api/v1/auth/register` | — | Create account, returns JWT |
 | `POST` | `/api/v1/auth/login` | — | Login, returns JWT |
 | `GET` | `/api/v1/auth/me` | Bearer | Current user profile |
 
-### Categories
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/api/v1/categories` | Admin | Create category |
-| `GET` | `/api/v1/categories` | — | List all categories |
-| `GET` | `/api/v1/categories/{id}` | — | Get single category |
-| `PUT` | `/api/v1/categories/{id}` | Admin | Partial update |
-| `DELETE` | `/api/v1/categories/{id}` | Admin | Delete |
-
 ### Products
-
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/v1/products` | Admin | Create product |
-| `GET` | `/api/v1/products` | — | List products (`?category_id`, `?search`, `?skip`, `?limit`) |
-| `GET` | `/api/v1/products/{id}` | — | Get single product |
-| `PUT` | `/api/v1/products/{id}` | Admin | Partial update |
+| `GET` | `/api/v1/products` | — | List (`?category_id`, `?search`, `?skip`, `?limit`) |
+| `GET` | `/api/v1/products/{id}` | — | Single product |
+| `POST` | `/api/v1/products` | Admin | Create |
+| `PUT` | `/api/v1/products/{id}` | Admin | Update |
 | `DELETE` | `/api/v1/products/{id}` | Admin | Delete |
 
 ### Cart
-
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/api/v1/cart` | Bearer | Get current user's cart (auto-created on first access) |
-| `POST` | `/api/v1/cart/add` | Bearer | Add product; increments qty if already in cart |
-| `PUT` | `/api/v1/cart/update` | Bearer | Set exact quantity (0 removes the item) |
+| `GET` | `/api/v1/cart` | Bearer | Get cart (auto-created on first access) |
+| `POST` | `/api/v1/cart/add` | Bearer | Add item (increments qty if already present) |
+| `PUT` | `/api/v1/cart/update` | Bearer | Set exact quantity (0 removes item) |
 | `DELETE` | `/api/v1/cart/remove` | Bearer | Remove item |
 
 ### Orders
-
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/v1/orders` | Bearer | Create order from cart (clears cart on success) |
-| `GET` | `/api/v1/orders` | Bearer | List current user's orders |
+| `POST` | `/api/v1/orders` | Bearer | Create from cart (clears cart on success) |
+| `GET` | `/api/v1/orders/my` | Bearer | My orders |
 | `GET` | `/api/v1/orders/{id}` | Bearer | Order detail |
-| `PUT` | `/api/v1/orders/{id}/status` | Admin | Update order status |
-| `GET` | `/api/v1/orders/admin/all` | Admin | Paginated all orders `{items, total, skip, limit}` |
+| `PUT` | `/api/v1/orders/{id}/status` | Admin | Update status |
+| `PATCH` | `/api/v1/orders/{id}/status` | Admin | Update status (mobile) |
+| `GET` | `/api/v1/orders/admin/all` | Admin | All orders (paginated) |
+
+### Admin
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/admin/dashboard` | Admin | `{total_users, total_orders, total_products, total_revenue}` |
+| `GET` | `/api/v1/admin/users` | Admin | Paginated user list |
 
 ### AI Chat
-
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/v1/ai/chat` | — | `{ message, history[] }` → `{ reply }` — Claude Haiku with product context |
-
-### Health
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/api/v1/health` | — | App + DB connectivity status |
+| `POST` | `/api/v1/ai/chat` | — | `{message, history[]}` → `{reply}` |
 
 ---
 
 ## Authentication & Roles
 
-### Flow
-
 ```
-POST /auth/register  →  bcrypt hash → save User (role=customer) → return JWT
+POST /auth/register  →  bcrypt hash → save user (role=customer) → return JWT
 POST /auth/login     →  verify hash → return JWT
-GET  /auth/me        →  decode JWT → return user profile  [protected]
+GET  /auth/me        →  decode JWT → return user profile
 ```
-
-### Roles
 
 | Role | Access |
 |------|--------|
-| `customer` | Cart, Orders (own), public read endpoints |
-| `admin` | All of the above + Category/Product writes + Order status updates + all orders list + Users list |
+| `customer` | Cart, own orders, public read endpoints |
+| `admin` | All of the above + CRUD writes + all orders + user management |
 
-To promote a user to admin, run `python scripts/fix_admin.py` or set `role = 'admin'` directly in the database.
-
-### JWT
-
-```json
-{ "sub": "user@example.com", "exp": 1234567890 }
-```
-
-Signed with **HS256**. Secret and expiry configured via environment variables.
+JWT payload: `{ "sub": "user@email.com", "exp": ... }` — signed with HS256.
 
 ---
 
-## Running with Docker (Recommended)
+## Running with Docker
 
 ```bash
 docker-compose up --build
 ```
 
 - API → `http://localhost:8000`
-- Docs → `http://localhost:8000/docs`
+- Swagger docs → `http://localhost:8000/docs`
 - MSSQL → `localhost:1433`
-
-The compose file starts MSSQL 2022, waits for it via TCP healthcheck, then starts the FastAPI container which runs Alembic migrations automatically on startup.
 
 ---
 
-## Running Locally (Without Docker)
+## Running Locally
 
-### Prerequisites
-
-- Microsoft SQL Server (any edition)
-- [ODBC Driver 18 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) installed
-
-### Step 1 — Configure .env
+### Backend
 
 ```bash
 cd backend
-copy .env.example .env
-```
-
-Edit `.env`:
-
-```env
-DB_SERVER=localhost\SQLEXPRESS     # or your instance name
-DB_NAME=NovaStoreDB
-DB_DRIVER=ODBC Driver 18 for SQL Server
-DB_TRUSTED_CONNECTION=true         # Windows Auth (recommended for local dev)
-JWT_SECRET_KEY=your-secret-here
-JWT_ALGORITHM=HS256
-JWT_EXPIRE_MINUTES=60
-```
-
-If using SQL Server authentication (username + password):
-
-```env
-DB_TRUSTED_CONNECTION=false
-DB_USER=sa
-DB_PASSWORD=your_password
-```
-
-### Step 2 — Create the database
-
-```bat
+copy .env.example .env   # configure DB + JWT + ANTHROPIC_API_KEY
 py scripts/create_db.py
-```
-
-### Step 3 — Apply migrations
-
-```bat
 alembic upgrade head
-```
-
-| Migration | Tables created |
-|---|---|
-| `0001_initial_tables` | `users`, `categories`, `products` |
-| `0002_add_cart_tables` | `carts`, `cart_items` |
-| `0003_role_and_order_tables` | `role` column on `users`, `orders`, `order_items`, `addresses` |
-
-### Step 4 — Seed data + admin user
-
-```bat
 py scripts/seed.py
 py scripts/fix_admin.py
-```
-
-### Step 5 — Run
-
-```bat
 uvicorn app.main:app --reload
 ```
 
-API → `http://localhost:8000`  
-Docs → `http://localhost:8000/docs`
+### Frontend
 
----
-
-## Running the Frontend
-
-```bat
+```bash
 cd frontend
 npm install
 npm run dev
+# → http://localhost:5173
 ```
 
-App → `http://localhost:5173`  
-Admin panel → `http://localhost:5173/admin`  
-Admin credentials → `admin@admin.com` / `admin123`
+### Flutter
 
-The frontend expects the backend at `http://localhost:8000`. Configure via `frontend/.env`:
-
-```env
-VITE_API_URL=http://localhost:8000/api/v1
-```
-
----
-
-## Running the Flutter Mobile App
-
-### Prerequisites
-
-- Flutter SDK ≥ 3.16.0 installed and on PATH
-- Android emulator (Pixel 8 API 35 recommended) **or** physical device with USB debugging enabled
-
-### Step 1 — Start the backend first
-
-```bat
-cd backend
-venv\Scripts\activate
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### Step 2 — Run the app
-
-```bat
+```bash
 cd mobile
 flutter pub get
 flutter run
 ```
 
-For a specific device:
-
-```bat
-flutter devices                        # list connected devices
-flutter run -d <device-id>
-```
-
-### Connection URLs
-
-| Target | URL in `lib/config/app_config.dart` |
-|--------|--------------------------------------|
-| Android emulator | `http://10.0.2.2:8000` *(default)* |
-| iOS simulator | `http://localhost:8000` |
-| Physical device | `http://<your-local-ip>:8000` |
-
-### Admin login (mobile)
-
-1. Open the app → tap **Profile** tab → **Sign In**
-2. Email: `admin@admin.com` · Password: `Admin1234!`
-3. After login, Profile tab shows **Admin Panel** button
-4. Admin Panel has 5 tabs: Dashboard · Products · Orders · Users · Settings
-
-### Offline mode
-
-If the backend is not running, the app automatically falls back to:
-1. `assets/products.json` (10 local products)
-2. Hardcoded mock list
-
-All screens work without a backend connection.
-
----
-
-## AI Chat
-
-The AI assistant is available on every page via the floating button (bottom-right corner).
-
-- **With `ANTHROPIC_API_KEY`** set in `backend/.env`: uses Claude Haiku for intelligent, context-aware replies. The endpoint performs a lightweight keyword search of the products table and injects matching products into the system prompt (RAG-lite).
-- **Without an API key**: falls back to a rule-based engine covering greetings, product categories, budget queries, and order questions. The UI works identically in both modes.
-
-```env
-# backend/.env
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
----
-
-## Migrations
-
-```bash
-# Create a new migration after changing a model
-alembic revision --autogenerate -m "describe your change"
-
-# Apply all pending migrations
-alembic upgrade head
-
-# Roll back one step
-alembic downgrade -1
-
-# Check current state
-alembic current
-```
+See `frontend/README.md` and `mobile/README.md` for detailed setup instructions.
 
 ---
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `DB_SERVER` | ✓ | — | SQL Server hostname or `host\instance` |
-| `DB_NAME` | ✓ | — | Database name |
-| `DB_DRIVER` | — | `ODBC Driver 18 for SQL Server` | ODBC driver name |
-| `DB_TRUSTED_CONNECTION` | — | `false` | Use Windows Authentication |
-| `DB_USER` | * | — | SQL login username *(if not using trusted connection)* |
-| `DB_PASSWORD` | * | — | SQL login password *(never commit)* |
-| `JWT_SECRET_KEY` | ✓ | — | JWT signing key *(never commit)* |
-| `JWT_ALGORITHM` | — | `HS256` | Signing algorithm |
-| `JWT_EXPIRE_MINUTES` | — | `60` | Token lifetime in minutes |
-| `DEBUG` | — | `false` | Enables SQL query logging |
-| `ANTHROPIC_API_KEY` | — | — | Enables Claude Haiku AI chat *(optional)* |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DB_SERVER` | ✓ | SQL Server hostname or `host\instance` |
+| `DB_NAME` | ✓ | Database name |
+| `DB_TRUSTED_CONNECTION` | — | Use Windows Authentication |
+| `DB_USER` / `DB_PASSWORD` | * | SQL login (if not using trusted connection) |
+| `JWT_SECRET_KEY` | ✓ | JWT signing key — never commit |
+| `JWT_EXPIRE_MINUTES` | — | Token lifetime (default: 60) |
+| `ANTHROPIC_API_KEY` | — | Enables Claude Haiku AI chat (optional) |
+| `DEBUG` | — | Enables SQL query logging |
 
 ---
 
 ## Roadmap
 
-- [x] Backend foundation (FastAPI + MSSQL + SQLAlchemy + Alembic)
-- [x] Database models (User, Category, Product, ProductImage, Cart, CartItem, Order, OrderItem, Address)
-- [x] Authentication (register, login, JWT)
-- [x] Role-based access control (customer / admin)
-- [x] Category CRUD (admin-protected writes)
-- [x] Product CRUD (search + filter + pagination, admin-protected writes)
-- [x] Shopping cart
-- [x] Order system (create from cart, price snapshot, status lifecycle)
-- [x] CORS middleware
-- [x] Product images (URL-based, primary flag)
-- [x] Seed data script
-- [x] Docker (Dockerfile + docker-compose, MSSQL 2022, TCP healthcheck)
-- [x] React admin panel — auth layer (login, protected routes, layout)
-- [x] React admin panel — Dashboard (stat cards, bar chart, recent orders)
-- [x] React admin panel — Products page (table, Add/Edit panel)
-- [x] React admin panel — Orders page (filter tabs, table, detail panel, status update)
-- [x] React admin panel — Users page (table, search, role/status filters)
-- [x] React customer web — Navbar (sticky dark, inline SVG icons, inline search, categories dropdown)
-- [x] React customer web — CategoriesBar (7 categories, inline SVG icons, centered)
-- [x] React customer web — Footer (dark, 4-column links)
-- [x] React customer web — Homepage (hero slider, deals banner, popular products, new arrivals, testimonials, features strip, brands, newsletter)
-- [x] React customer web — Shop page (sidebar filters, 4-column product grid, sort, pagination)
-- [x] React customer web — Login & Register pages
-- [x] React customer web — Product Detail page (image gallery, color/storage selectors, qty picker, Add to Cart, tabs, specs, related products)
-- [x] React customer web — Cart page (item list, qty update, remove, promo code NOVA10, order summary)
-- [x] React customer web — Favorites page (wishlist grid, empty state)
-- [x] React customer web — Profile page (sidebar menu, personal info form, recent orders)
-- [x] React customer web — 404 page (layered design, search, popular products)
-- [x] AI chat endpoint (Claude Haiku + RAG-lite product context + rule-based fallback)
-- [x] AI chat UI panel (AIChatPanel — slide-up, message history, typing indicator, quick-start chips)
-- [x] Flutter mobile app — Figma-pixel-perfect screens (Home, Shop, Favorites, Cart, Profile, Login)
-- [x] Flutter — ProductDetailScreen (SliverAppBar, color/storage selectors, qty counter, tabs)
-- [x] Flutter — Admin panel (5-tab dark nav: Dashboard, Products, Orders, Users, Settings)
-- [x] Flutter — AI Chat screen accessible from Home AppBar robot icon + AI banner
-- [x] Flutter — Offline-first: assets/products.json → API → hardcoded mock fallback chain
-- [x] Flutter — Provider pattern: AuthProvider, CartProvider, FavoritesProvider
-- [x] Flutter — AndroidManifest INTERNET permission + cleartext traffic fix
-- [x] Flutter — Product card overflow fix (childAspectRatio tuned, AspectRatio 1.1)
-- [x] Backend — Admin router: GET /admin/dashboard, GET /admin/users
-- [x] Backend — PATCH /orders/{id}/status + GET /orders/my endpoints added
-- [x] Backend — "delivered" added to valid order statuses
+- [x] Backend — FastAPI + MSSQL + SQLAlchemy + Alembic + Docker
+- [x] Auth — JWT register/login, bcrypt, role-based access control
+- [x] Product catalog — CRUD, search, filter, pagination, images
+- [x] Shopping cart — auto-create, increment on duplicate
+- [x] Order system — create from cart, price snapshot, status lifecycle
+- [x] Admin API — dashboard stats, user management
+- [x] React web — full customer storefront (7 pages)
+- [x] React web — admin panel (Dashboard, Products, Orders, Users)
+- [x] React web — AI chat panel (Claude + rule-based fallback)
+- [x] React web — deployed to Netlify
+- [x] Flutter mobile — pixel-perfect Figma implementation (10 screens)
+- [x] Flutter mobile — offline-first (API → JSON asset → mock fallback)
+- [x] Flutter mobile — Provider state management (Auth, Cart, Favorites)
+- [x] Flutter mobile — admin panel (5-tab dark navigation)
+- [x] AI — RAG-lite product context injection, English-only responses

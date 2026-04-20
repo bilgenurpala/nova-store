@@ -1,6 +1,14 @@
 # Nova Store — React Web Frontend
 
-React + TypeScript + Vite ile geliştirilmiş Nova Store e-ticaret platformunun web istemcisi. Hem müşteri arayüzünü hem de tam donanımlı admin panelini kapsar.
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat&logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
+![Netlify](https://img.shields.io/badge/Netlify-Live-00C7B7?style=flat&logo=netlify&logoColor=white)
+
+> The React web client for Nova Store. Covers both the customer-facing storefront and a full admin panel, connected to a shared FastAPI backend via Axios.
+
+**Live Demo →** [superlative-chebakia-900ccf.netlify.app](https://superlative-chebakia-900ccf.netlify.app)
 
 ---
 
@@ -9,41 +17,81 @@ React + TypeScript + Vite ile geliştirilmiş Nova Store e-ticaret platformunun 
 | Technology | Purpose |
 |------------|---------|
 | React 18 | UI framework |
-| TypeScript | Type safety |
-| Vite | Build tool + dev server |
-| Tailwind CSS v4 | Utility-first styling |
-| Axios | HTTP client + auth interceptor |
-| React Router v6 | Client-side routing |
+| TypeScript | Static typing across the entire codebase |
+| Vite 5 | Build tool, HMR dev server, API proxy |
+| Tailwind CSS v4 | Utility-first styling with CSS variable tokens |
+| Axios | HTTP client with request/response interceptors |
+| React Router v6 | Client-side routing with protected routes |
 
 ---
 
-## Features
+## Pages & Features
 
-### Customer Pages
-- **HomePage** — Hero slider, deals banner, popular products, new arrivals, testimonials, features strip, brands, newsletter
-- **ShopPage** — Sidebar filters (category, price, rating), 4-column product grid, sort dropdown, pagination
-- **ProductDetailPage** — Image gallery, color/storage selectors, quantity picker, Add to Cart, tabbed specs & reviews, related products
-- **CartPage** — Item list with quantity update/remove, promo code (NOVA10), order summary
-- **FavoritesPage** — Wishlist grid with heart toggle, empty state CTA
-- **ProfilePage** — Left sidebar nav, personal info form (2-column), recent orders
-- **NotFoundPage** — Layered 404, search recovery, popular products
+### Customer Storefront
+
+**HomePage** — Hero image slider, deals banner, popular products grid, new arrivals, testimonials strip, brand logos, newsletter signup. Floating AI chat button (bottom-right) toggles the `AIChatPanel`.
+
+**ShopPage** — Left sidebar with category, price range, and rating filters. 4-column responsive product grid with sort dropdown (price, rating, newest) and pagination. Filters and search are reflected in URL query params.
+
+**ProductDetailPage** — Multi-image gallery with thumbnail navigation, color and storage selector chips, quantity picker, Add to Cart / Add to Favorites buttons. Tabbed content area (Description / Specifications / Reviews). Related products carousel at the bottom.
+
+**CartPage** — Item list with inline quantity update and remove controls. Promo code input (NOVA10 applies 10% discount). Order summary with subtotal, discount, shipping, and total. Checkout button.
+
+**FavoritesPage** — Wishlist grid with filled red heart on each card. Clicking the heart removes the item instantly. Empty state shows a heart icon and a "Browse Products" CTA.
+
+**ProfilePage** — Left sidebar navigation with 8 menu items. Right panel: 2-column personal information form (first name, last name, email, phone, location, website), bio textarea, gender radio buttons, Save Changes button. Recent orders section at the bottom.
+
+**NotFoundPage** — Layered large "404" watermark, Go Home + Browse Shop buttons, inline search input for direct recovery, Popular Products section fetched from the API.
 
 ### Admin Panel (`/admin`)
-- **Dashboard** — 4 stat cards, 12-month bar chart, recent orders table
-- **Products** — Product table (image, name, category, price, stock, status) + Add/Edit slide-in panel
-- **Orders** — Filter tabs (All/Pending/Processing/Shipped/Delivered/Cancelled), order table, detail panel with status updater
-- **Users** — User table (avatar, name, email, role badge, status), search, role/status filters
 
-### Auth
-- **Customer Login / Register** — JWT-based login and registration
-- **Admin Login** — Separate admin login page (`/admin/login`)
-- Protected routes via `ProtectedRoute` component
+**Dashboard** — 4 stat cards (total users, orders, products, revenue) with colour-coded left-accent bars. 12-month sales overview bar chart with opacity-gradient bars. Recent orders table with status badges.
 
-### AI Chat
-- Floating chat button (bottom-right corner) available on all customer pages
-- `AIChatPanel` — 380×528px slide-up panel, dark header, message history, typing indicator (3-dot bounce), 4 quick-start suggestion chips
-- `**bold**` markdown rendering in AI replies
-- Calls `POST /api/v1/ai/chat` (proxied to backend via Vite)
+**Products** — Full product table (image, name, category, price, stock, status). Add Product slide-in panel with form validation. Wired to `GET /products` and `POST /products`.
+
+**Orders** — Filter tab bar (All / Pending / Processing / Shipped / Delivered / Cancelled) with live count badges. Orders table. Order detail slide-in panel showing item list, shipping address, and a status updater dropdown. Wired to `GET /orders/admin/all` and `PUT /orders/:id/status`.
+
+**Users** — User table with avatar initials, email, role badge (admin / customer), status, join date, and action buttons. Search bar and role/status filter dropdowns. Wired to `GET /admin/users`.
+
+### AI Chat Panel
+
+`AIChatPanel` is a 380 × 528 px floating panel that slides up from the bottom-right corner. It maintains full conversation history and sends it with every request so the server stays stateless. Key details:
+
+- Animated typing indicator (3-dot bounce) while waiting for a response
+- 4 quick-start suggestion chips visible before the first message is sent; hidden afterwards to keep the conversation clean
+- `**bold**` markdown syntax in AI replies is rendered as `<strong>` tags
+- `Enter` sends; `Shift+Enter` inserts a newline
+- Auto-scrolls to the latest message; auto-focuses the input when opened
+
+---
+
+## How the API Layer Works
+
+```
+src/api/
+├── client.ts       ← Axios instance (baseURL from VITE_API_URL)
+├── auth.ts         ← register, login, getMe
+├── categories.ts   ← list, get
+├── products.ts     ← list, get, create, update, delete
+├── cart.ts         ← getCart, addItem, updateItem, removeItem
+└── orders.ts       ← createOrder, getMyOrders, getOrder
+```
+
+**Auth interceptor** — Every outgoing request has the JWT from `localStorage` attached as `Authorization: Bearer <token>`. On a 401 response, the token is cleared and the user is redirected to the appropriate login page (`/login` for customers, `/admin/login` for admins).
+
+**Vite proxy** — In development, `vite.config.ts` proxies all `/api` requests to `http://localhost:8000`. This means relative fetch calls (e.g. `/api/v1/ai/chat`) work without CORS issues and without changing the `VITE_API_URL` during development. In production (Netlify), `VITE_API_URL` points directly to the deployed backend.
+
+---
+
+## Global State
+
+Three React Contexts manage shared state across the component tree:
+
+| Context | State | Persistence |
+|---------|-------|-------------|
+| `AuthContext` | JWT token, user email, role, `isAdmin` flag | `localStorage` |
+| `CartContext` | Cart item count (drives Navbar badge) | API (server-side) |
+| `FavoritesContext` | Favorites list, add/remove toggle | `localStorage` |
 
 ---
 
@@ -51,97 +99,72 @@ React + TypeScript + Vite ile geliştirilmiş Nova Store e-ticaret platformunun 
 
 ```
 frontend/
-├── .env                         ← API base URL
-├── vite.config.ts               ← Vite config + /api proxy
+├── .env                          ← VITE_API_URL
+├── netlify.toml                  ← Build config + SPA redirect rules
+├── vite.config.ts                ← Vite + Tailwind plugins + /api proxy
 ├── package.json
 └── src/
-    ├── main.tsx                 ← App entry
-    ├── App.tsx                  ← BrowserRouter + all Routes
-    ├── index.css                ← CSS variable tokens + global resets
+    ├── main.tsx
+    ├── App.tsx                   ← BrowserRouter + all Routes
+    ├── index.css                 ← CSS variable tokens + global resets
     ├── api/
-    │   ├── client.ts            ← Axios instance + Bearer token interceptor
-    │   ├── auth.ts
-    │   ├── categories.ts
-    │   ├── products.ts
-    │   ├── cart.ts
-    │   └── orders.ts
+    │   ├── client.ts             ← Axios instance + interceptors
+    │   ├── auth.ts · categories.ts · products.ts · cart.ts · orders.ts
     ├── context/
-    │   ├── AuthContext.tsx      ← AuthProvider, useAuth hook (JWT persist)
-    │   ├── CartContext.tsx      ← Global cart count, drives Navbar badge
-    │   └── FavoritesContext.tsx ← Favorites list, localStorage persist
+    │   ├── AuthContext.tsx
+    │   ├── CartContext.tsx
+    │   └── FavoritesContext.tsx
     ├── types/
-    │   └── index.ts             ← TypeScript interfaces (Product, Order, …)
+    │   └── index.ts              ← Product, Order, CartItem, User…
     ├── components/
     │   ├── ProtectedRoute.tsx
-    │   ├── AIChatPanel.tsx      ← AI chat panel (Claude integration)
-    │   ├── CategoriesBar.tsx    ← Horizontal category pill bar
+    │   ├── AIChatPanel.tsx
+    │   ├── CategoriesBar.tsx
     │   └── layout/
+    │       ├── CustomerLayout.tsx
     │       ├── AdminLayout.tsx
+    │       ├── Navbar.tsx
     │       ├── Sidebar.tsx
-    │       ├── CustomerLayout.tsx   ← Navbar + CategoriesBar + Outlet + Footer
-    │       ├── Navbar.tsx           ← Sticky dark navbar, inline SVG icons
-    │       └── Footer.tsx           ← Dark 4-column footer
+    │       └── Footer.tsx
     └── pages/
-        ├── auth/
-        │   ├── Login.tsx            ← Admin login
-        │   ├── CustomerLogin.tsx    ← Customer login
-        │   └── Register.tsx         ← Customer register
-        ├── admin/
-        │   ├── Dashboard.tsx
-        │   ├── Products.tsx
-        │   ├── Orders.tsx
-        │   └── Users.tsx
-        ├── HomePage.tsx
-        ├── ShopPage.tsx
-        ├── ProductDetailPage.tsx
-        ├── CartPage.tsx
-        ├── FavoritesPage.tsx
-        ├── ProfilePage.tsx
+        ├── auth/         Login.tsx · CustomerLogin.tsx · Register.tsx
+        ├── admin/        Dashboard.tsx · Products.tsx · Orders.tsx · Users.tsx
+        ├── HomePage.tsx · ShopPage.tsx · ProductDetailPage.tsx
+        ├── CartPage.tsx · FavoritesPage.tsx · ProfilePage.tsx
         └── NotFoundPage.tsx
 ```
 
 ---
 
-## Running
-
-### Prerequisites
-- Node.js ≥ 18
-- Backend running on `http://localhost:8000`
-
-### Install & start
+## Running Locally
 
 ```bash
+# Install dependencies
 npm install
+
+# Start dev server (backend must be running on port 8000)
 npm run dev
-```
+# → http://localhost:5173
 
-App → `http://localhost:5173`  
-Admin panel → `http://localhost:5173/admin`
-
-### Build for production
-
-```bash
+# Production build
 npm run build
 ```
 
----
-
-## Environment Variables
-
-Create a `.env` file in this directory:
+### Environment variable
 
 ```env
+# .env
 VITE_API_URL=http://localhost:8000/api/v1
 ```
 
-The Vite dev server also proxies all `/api` requests to the backend automatically (configured in `vite.config.ts`), so relative fetch calls like `/api/v1/ai/chat` work in development without CORS issues.
+In production, set `VITE_API_URL` to your deployed backend URL in the Netlify dashboard under **Site configuration → Environment variables**.
 
 ---
 
 ## Routes
 
-| Path | Component | Auth |
-|------|-----------|------|
+| Path | Page | Auth required |
+|------|------|---------------|
 | `/` | HomePage | — |
 | `/shop` | ShopPage | — |
 | `/shop/:id` | ProductDetailPage | — |

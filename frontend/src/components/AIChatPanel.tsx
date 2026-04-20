@@ -80,7 +80,8 @@ export default function AIChatPanel({ open, onClose }: AIChatPanelProps) {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/v1/ai/chat', {
+      const apiBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
+      const res = await fetch(`${apiBase}/ai/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
